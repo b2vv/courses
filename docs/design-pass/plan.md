@@ -465,7 +465,7 @@ Non-goals: C3b (#11 і page-level loading/error маршруту курсу); т
   - «Наступна» на передостанній сторінці (на останній вона зникає) і «Попередня» на другій сторінці → фокус на `main#main`, а не на `body`;
   - повільна пагінація (затримка відповіді списку) → так само `main#main`;
   - повільна пагінація, під час якої користувач після появи рамки очікування переводить фокус на посилання хедера «Каталог» → після відповіді фокус лишається на ньому;
-  - у рамці очікування поле пошуку не отримує фокусу ні Tab-ом, ні кліком (`inert` на формі), а статус «Завантажуємо курси» лишається в дереві доступності (`getByRole('status')` видимий, `accessibility.snapshot` містить його).
+  - у рамці очікування поле пошуку не отримує фокусу ні Tab-ом, ні кліком (`inert` на формі), а статус «Завантажуємо курси» лишається в дереві доступності (`getByRole('status')` видимий, `page.locator('body').ariaSnapshot()` містить його).
 - **C3b-7.**
   - Заголовок вкладки змінюється після кожної навігації без перезавантаження: курс → назва курсу, каталог → «Каталог».
   - Меню-картка хедера закривається (наявна поведінка `onBeforeNavigate`).
@@ -513,6 +513,23 @@ Non-goals:
 
 **Планова критика / defense.** Ред. 1 — чотири окремі лінзи (окремі процеси Codex, `_wip-review-c3b-lens-<lens>.md`) + defense (`_wip-review-c3b-defense.md`): 4 з 4 лінз і defense повернулись; ai-slop 0, complexity 0 (+1 неблокуюча, прийнято), logical-gaps 2, edge-cases 1, defense 2 пробіли → ред. 2. Повторно — лінзи, яких торкнулась зміна (logical-gaps, edge-cases) + defense. Ред. 2: defense 0 пробілів, logical-gaps 1 (title 404), edge-cases 1 (фокус під час повільної навігації) → ред. 3; повторно — logical-gaps, edge-cases + defense. Ред. 3: усі три — одна знахідка (поле рамки очікування зникає) → ред. 4; повторно — ті самі три. Ред. 4: усі три — одна знахідка (`inert` ховає статус) → ред. 5; повторно — ті самі три.
 
-**Рев'ю-блок.** task `design-pass C3b` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED (3 блокери + 2 пробіли defense); ред. 2: `verdict_received` BLOCKED (logical-gaps 1, edge-cases 1; defense 0); ред. 3: `verdict_received` BLOCKED (logical-gaps 1, edge-cases 1, defense 1 — одна причина); ред. 4: `verdict_received` BLOCKED (усі три — `inert` ховає статус); ред. 5: `prepared`.
+**Вердикт планової критики (ред. 5, `5acfa4a1`).** Лінзи — 4 запущено / 4 повернулись, кожна окремим процесом Codex:
+- ai-slop 0 і complexity 0 (ред. 1; неблокуюча CX1 прийнята в ред. 2; наступні зміни — фокус, стани й тексти, поза їхньою зоною);
+- logical-gaps 0 (ред. 5; неблокуюча — `ariaSnapshot()` замість неіснуючого `accessibility.snapshot`, застосовано);
+- edge-cases 0 (ред. 5).
 
-**Допуск: NOT READY** — до вердикту планової критики.
+Defense (ред. 5): 0 пробілів.
+
+| # | Питання defense | Закрито рядками цього розділу | Вердикт |
+|---|---|---|---|
+| 1 | Невалідний вхід | R5 (невалідне тіло → `CourseFailure`; `course_not_found`/`invalid_slug` → 404) | closed |
+| 2 | Збій залежності | R3, R5, R4a (статус поза `inert`), C3b-3/C3b-4 | closed |
+| 3 | Гонки й повтор | «Гонки» (скасування, один рух фокусу), R4 (б), R6 (`paid` один раз, опитування зупиняється) | closed |
+| 4 | Порожні й межові дані | R4 (межі пагінації), R4a, C3b-6 | closed |
+| 5 | Відкат | «Відкат» | closed |
+
+Журнали: `_wip-review-c3b-lens-*.md` (ред. 1), `*-r2.md` … `*-r5.md`, `_wip-review-c3b-defense*.md`.
+
+**Рев'ю-блок.** task `design-pass C3b` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED (3 блокери + 2 пробіли defense); ред. 2: `verdict_received` BLOCKED (logical-gaps 1, edge-cases 1; defense 0); ред. 3: `verdict_received` BLOCKED (logical-gaps 1, edge-cases 1, defense 1 — одна причина); ред. 4: `verdict_received` BLOCKED (усі три — `inert` ховає статус); ред. 5: `verdict_received` — **ACCEPTED**.
+
+**Допуск: READY** (вердикт ACCEPTED на ред. 5; власник — рішення 2026-11-23 про окремий зріз і «Так, план C3b»).
