@@ -137,4 +137,7 @@ test('changing the sort applies at once, keeps focus and follows Back', async ({
   await expect(page).toHaveURL(/[?&]q=Go&sort=title/);
   await expect(field).toHaveValue('Go');
   await expect(sort).toHaveValue('title');
+  await field.hover();
+  await field.click();
+  await expect(field).toHaveValue('Go');
 });
