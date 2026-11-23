@@ -46,7 +46,10 @@ test('SSR API failure is visible and retry preserves search after recovery', asy
     const response = await page.goto(url);
     expect(response?.status()).toBeGreaterThanOrEqual(500);
     await expect(page.getByText('Не вдалося завантажити курси')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toHaveCount(0);
+    // The error sits where the list would be: the page keeps its heading and search
+    // (design-pass C2 #10), and no stale course list is drawn.
+    await expect(page.getByRole('heading', { level: 1, name: 'Каталог курсів' })).toBeVisible();
+    await expect(page.locator('.course-list')).toHaveCount(0);
     const retry = page.getByRole('link', { name: 'Спробувати ще раз' });
     await expect(retry).toHaveAttribute('href', url);
     // B-18: git-ignored artifacts dir, not the tracked docs tree (see accessibility.spec.ts).

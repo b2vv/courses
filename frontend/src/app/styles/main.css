@@ -589,18 +589,14 @@ a.ui-button {
   }
 }
 .catalog-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+  max-inline-size: 46rem;
   margin-bottom: clamp(2rem, 5vw, 4rem);
 }
-.catalog-heading > div {
-  max-inline-size: 46rem;
-}
-.catalog-count {
+/* The one course counter sits under the description, next to what it counts (C2 #9). */
+.catalog-heading .catalog-count {
+  margin-block: var(--space-3) 0;
   color: var(--color-muted);
+  font-weight: 650;
 }
 .catalog-search {
   display: flex;
@@ -616,6 +612,10 @@ a.ui-button {
   min-width: min(100%, 16rem);
 }
 .sort-field {
+  /* Keeps the option text readable beside the field, and takes the whole row when the form
+     is narrower than that (320px, 200% text) instead of pushing past its edge (C2 #3). */
+  min-inline-size: min(100%, 12rem);
+  max-inline-size: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -623,6 +623,8 @@ a.ui-button {
   font-weight: 600;
 }
 .sort-field select {
+  /* Never wider than the form: at 200% text the option text alone was 20px wider (C2 #3). */
+  max-inline-size: 100%;
   min-height: 44px;
   padding: 0.6rem 2rem 0.6rem 0.75rem;
   border: 1px solid var(--color-border);
@@ -766,7 +768,19 @@ a.ui-button {
   flex-wrap: wrap;
   gap: var(--space-3) var(--space-4);
   margin-block-start: auto;
-  padding: var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-6);
+}
+/* Price, rating and lessons read as one line that wraps between items, not one row each (C2 #4). */
+.course-card .course-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  color: var(--color-muted);
+}
+.course-price {
+  color: var(--color-text);
 }
 .course-price,
 .course-action {
@@ -793,6 +807,29 @@ a.ui-button {
   color: var(--color-on-primary);
   font-weight: 700;
   text-decoration: none;
+}
+/* Card-shaped placeholders for the list while it loads (C2 #10). */
+.catalog-skeleton {
+  display: block;
+}
+.catalog-skeleton-card {
+  overflow: hidden;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding-block-end: var(--space-6);
+  padding-inline: var(--space-6);
+}
+.catalog-skeleton-cover {
+  display: block;
+  block-size: 11rem;
+  margin-inline: calc(-1 * var(--space-6));
+  margin-block-end: var(--space-3);
+  background: var(--color-surface);
+}
+.catalog-skeleton-short {
+  inline-size: 60%;
 }
 .catalog-pagination {
   display: flex;
@@ -1837,8 +1874,10 @@ a.ui-button {
     grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
   }
+  /* No inner inset on narrow screens: the page already has one, and the second inset left the
+     search field 260px wide at 200% text (C2 #3). */
   .catalog-search {
-    padding: 1rem;
+    padding-inline: 0;
   }
   .catalog-pagination {
     align-items: flex-start;

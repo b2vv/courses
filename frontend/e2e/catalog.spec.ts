@@ -54,10 +54,14 @@ test('search and pagination live in the URL and recover from an empty page', asy
 
   // Offset one past the end of a scoped result is the empty page, and the recovery link works
   // from there - the same claim the ceiling case makes, on a boundary a fixture can reach.
+  // The one way out leads to the last page that has courses, with the same query; no page
+  // links are offered from an empty page (design-pass C2 #1, #7).
   await page.goto('/courses?q=React&limit=1&offset=1&sort=recent');
   await expect(page.getByText('На цій сторінці немає курсів')).toBeVisible();
-  await page.getByRole('link', { name: 'На першу сторінку' }).click();
-  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Сторінки каталогу' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'До останньої сторінки' }).click();
+  await expect(page.getByRole('heading', { name: 'React: доступні інтерфейси' })).toBeVisible();
+  expect(Number(new URL(page.url()).searchParams.get('offset'))).toBe(0);
 
   await page.goto('/courses?q=React&limit=1&offset=1&sort=recent');
   await page.getByLabel('Знайти курс').fill('Go');
@@ -70,8 +74,15 @@ test('search and pagination live in the URL and recover from an empty page', asy
 
   await page.goto('/courses?limit=1&offset=10000');
   await expect(page.getByText('На цій сторінці немає курсів')).toBeVisible();
-  await page.getByRole('link', { name: 'На першу сторінку' }).click();
-  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  await page.getByRole('link', { name: 'До останньої сторінки' }).click();
+  await expect(page.locator('.course-list').getByRole('listitem')).toHaveCount(1);
+
+  // A search with no result offers to clear it, and no pages.
+  await page.goto('/courses?q=zzz-no-such-course');
+  await expect(page.getByText('Курсів не знайдено')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Сторінки каталогу' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Скинути пошук' }).click();
+  await expect(page.getByLabel('Знайти курс')).toHaveValue('');
 });
 
 test('hidden and absent courses return 404', async ({ page }) => {
@@ -97,4 +108,14 @@ test('catalog hydrates without duplicate data requests or errors', async ({ page
   await expect(page.getByLabel('Знайти курс')).toHaveValue('test hydration');
   expect(errors).toEqual([]);
   expect(requests).toEqual([]);
+});
+
+test('changing the sort applies at once and keeps focus on the sort control', async ({ page }) => {
+  await page.goto('/courses?q=&sort=recent&limit=20&offset=0');
+  const sort = page.getByLabel('Сортування');
+  await sort.focus();
+  await sort.selectOption('title');
+  await expect(page).toHaveURL(/sort=title/);
+  await expect(sort).toBeFocused();
+  await expect(sort).toHaveValue('title');
 });
