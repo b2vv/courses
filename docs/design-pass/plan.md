@@ -365,4 +365,4 @@ Non-goals: C3b (#11 і page-level loading/error маршруту курсу); т
 
 Журнали: `_wip-review-c3-plan.md` (ред. 1), `_wip-review-c3-lens-*.md` (ред. 2), `*-r3.md`, `*-r4.md`.
 
-**Допуск: READY** (вердикт ACCEPTED на ред. 4; власник — рішення 2026-11-23).
+**Допуск: READY** (вердикт ACCEPTED на ред. 4; власник — рішення 2026-11-23). **Стан: злито #122** (`b0de03ed`, 2026-11-23): ordered `make check` на `91d0d46b` GATE_EXIT=0 (unit 1546, e2e 172, B19 7/7); Codex-рев'ю коду R1/R2 BLOCK → R3 PASS; докази `evidence/C3.md`. Далі — C3b.
