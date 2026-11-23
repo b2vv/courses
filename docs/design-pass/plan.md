@@ -366,3 +366,113 @@ Non-goals: C3b (#11 і page-level loading/error маршруту курсу); т
 Журнали: `_wip-review-c3-plan.md` (ред. 1), `_wip-review-c3-lens-*.md` (ред. 2), `*-r3.md`, `*-r4.md`.
 
 **Допуск: READY** (вердикт ACCEPTED на ред. 4; власник — рішення 2026-11-23). **Стан: злито #122** (`b0de03ed`, 2026-11-23): ordered `make check` на `91d0d46b` GATE_EXIT=0 (unit 1546, e2e 172, B19 7/7); Codex-рев'ю коду R1/R2 BLOCK → R3 PASS; докази `evidence/C3.md`. Далі — C3b.
+
+## 17. Зріз C3b — посилання React Aria через роутер; стани сторінки курсу (власник 2026-11-23)
+
+**Підстава.** Аудит C3 #11 (`evidence/C3-audit.md`) і відповідь власника 2026-11-23: виправити окремим зрізом одразу після C3, одна спільна зміна для всіх екранів, зі своїм повним e2e. Користувач: «Так, план C3b» (2026-11-23).
+
+**Ред. 1, 2026-11-23.**
+
+### Факти (звірено з кодом на `cbad6649`)
+
+- `presentation/ui/controls.tsx:19-26` — `Link` = `Aria.Link`; у `frontend/src` немає `RouterProvider`. React Aria без провайдера рендерить `<a href>`, і клік — це повне завантаження документа. Таких посилань близько 40, у модулях identity, catalog, purchase, admin, learn, states і `routes/learn.tsx`.
+- Хедер і футер клієнта (`__root.tsx:206-296`), `AdminShell.tsx:93` (`to="/"`), `TeachLessonList`, `LearnerOverview` використовують TanStack `Link`, тобто вже навігують без перезавантаження.
+- `__root.tsx` `NotFound`/`PageError` навмисно мають звичайні `<a>` (G0: «a not-found answer can sit under a shell that is not the destination's»). `RouterProvider` їх не зачіпає, бо це не React Aria.
+- React Aria (`react-aria/dist/private/utils/openLink.mjs:45-52`) віддає клік роутеру лише за `target` порожнього або `_self`, того самого origin, без `download` і без модифікаторів (meta/ctrl/alt/shift). Інакше працює браузер: нова вкладка, завантаження файлу.
+- Роутер (`router.tsx`): без `basepath`, `defaultPreload: 'intent'`, власні `parseSearch`/`stringifySearch`, `scrollRestoration: true`. `router.navigate({ href })` приймає готовий href разом із пошуком (`router-core/dist/esm/link.d.ts:94`); `reloadDocument` дає повне завантаження (`:89`).
+- Запити: `staleTime` 60 с (`router.tsx`). Записи адмінки інвалідують лише адмін-ключі (`admin-queries.ts:51-61`), а публічні `['catalog']`/`['course']` — ні. `/admin` і `/teach` клієнтські (`ssr: false`), з окремою оболонкою (`__root.tsx:142-157`).
+- Маршрут курсу (`routes/courses.$slug.tsx:41-43`) має `pendingComponent: CatalogLoading` і `errorComponent: CatalogFailure`. Обидва мають тексти каталогу: «Завантажуємо курси», «Не вдалося завантажити курси» (`uk.ts:113-114`). Повтор у `ErrorState` (`states.tsx:30`) — посилання `retryHref` на ту саму адресу. Він розрахований на повне завантаження (G0 #6).
+- `<main id="main" tabIndex={-1}>` є в обох оболонках (`__root.tsx:357`, `AdminShell.tsx:148`). Після навігації без перезавантаження фокус зараз ніхто не переносить.
+- Захисту незбережених змін через `beforeunload`/`useBlocker` у коді немає; рядки редактора транскрипту зберігаються локально (`__root.tsx:172`).
+- e2e не шукає повного завантаження (`waitForNavigation`, `waitForLoadState`, `resourceType 'document'` — 0 збігів у `frontend/e2e`).
+
+### Рішення
+
+**R1. Один `RouterProvider` для всього застосунку.** Ставиться в `__root.tsx` (`Document`, усередині TanStack-роутера, над обома оболонками):
+- `navigate = (href, options) => router.navigate({ href, ...options })`;
+- `useHref` — тотожність: немає `basepath`, тож SSR і клієнт рендерять той самий `href` і розбіжності гідратації немає.
+
+Тип `routerOptions` реєструється через `declare module 'react-aria-components' { interface RouterConfig { routerOptions: { reloadDocument?: boolean; replace?: boolean } } }`. Модуль, де `RouterConfig` фактично оголошено (`@react-types/shared/src/dom.d.ts:231`, реекспорт через `react-aria-components`), звіряється під час typecheck. Тип `href` лишається `string`: посилання каталогу будують рядок разом із пошуком.
+
+**R2. Перехід між поверхнями — повне завантаження, як зараз.** Поверхня визначається за шляхом: `workspace` = `/admin`, `/admin/*`, `/teach`, `/teach/*`; решта — `client`. Якщо поверхня поточного й цільового шляху різна, `navigate` додає `reloadDocument: true`. Те саме ставиться на TanStack `Link` у `AdminShell.tsx:93` (`to="/"`), єдиний наявний перехід між поверхнями без перезавантаження.
+
+- *Механізм:* записи адмінки й викладача не інвалідують публічних ключів (`admin-queries.ts:51-61`), а публічні дані живуть у кеші 60 с. Переглянутий в адмінці курс після правки показав би стару сторінку. Повне завантаження скидає кеш, тому поведінка лишається такою ж, як до зрізу.
+- *Відкинута альтернатива:* інвентар усіх записів адмінки, викладача, відео й документів з інвалідацією публічних ключів. Її ціна — кожен запис у кількох модулях і нова точка забуття.
+
+**R3. Повтор після помилки — повне завантаження.** `ErrorState` з `retryHref` передає `routerOptions={{ reloadDocument: true }}`. Семантика G0 #6 «повтор перезавантажує ту саму адресу» зберігається: свіжий SSR і новий кеш, без залежності від того, чи перезапустить роутер завантажувач для тієї самої адреси.
+
+**R4. Фокус після навігації.** Після навігації без перезавантаження, яка змінила `pathname`, фокус переходить на `#main` (`focus({ preventScroll: true })`; прокрутку веде `scrollRestoration`). Що відбувається в інших випадках:
+- зміна лише пошуку чи хешу (сторінки й фільтри каталогу) не рухає фокус;
+- перше завантаження — так само;
+- Back/Forward переносить фокус, як і клік.
+
+Механізм: `router.subscribe('onResolved', …)` з порівнянням попереднього й нового `pathname` в `Layout`. Це стосується й наявних TanStack-посилань хедера. Зараз після них фокус губиться на `body` (WCAG 2.4.3).
+
+**R5. Стани сторінки курсу — власні тексти.** Маршрут курсу отримує власні `CourseLoading` («Завантажуємо курс») і `CourseFailure` («Не вдалося завантажити курс» + наявна підказка + «Спробувати ще раз» з R3) з uk/en-ключами в `course.*`. Каталог лишає свої. `pendingMs` — типове значення роутера (1000 мс): швидка навігація не блимає скелетоном.
+
+**R6. Оплачене замовлення оновлює членство.** Коли опитування замовлення (`purchase-queries.ts:54-56`) бачить перехід у `paid`, інвалідуються `enrollmentMembershipQueryKey(courseId)` і `enrollmentMyMembershipsQueryKey`. Без цього курс, на який повертаються без перезавантаження зі сторінки замовлення, до 60 с показував би «Купити курс» замість «Почати навчання».
+
+### Acceptance
+
+- **C3b-1 (#11).** Каталог → курс (заголовок картки й кнопка картки), «← Усі курси», сторінки каталогу, «Почати навчання» → `/learn/<slug>`, «До каталогу» з 404 курсу: 0 нових запитів типу `document` після першого.
+  - Ctrl/Cmd-клік і середня кнопка відкривають нову вкладку, як і раніше.
+  - `#values` на головній прокручує до секції й не перезавантажує.
+- **C3b-2 (R2).**
+  - Посилання клієнт → `/admin`, `/teach` (хедер) і адмінка → клієнт («Переглянути курс», «До сайту») роблять рівно один запит `document`.
+  - Усередині адмінки й усередині `/teach` переходи йдуть без перезавантаження.
+- **C3b-3 (R3, R5).** Навігація без перезавантаження на курс, коли `GET /api/v1/courses/<slug>` відповідає 503:
+  - показує «Не вдалося завантажити курс» + «Спробувати ще раз»;
+  - повтор після відновлення API показує курс (один запит `document`).
+- **C3b-4 (R5).** Та сама навігація, коли API відповідає із затримкою > 1 с: «Завантажуємо курс» (`role="status"`), потім курс.
+- **C3b-5.** Навігація без перезавантаження на неіснуючий slug: 404 курсу (h1 «Курс не знайдено») і заголовок вкладки 404.
+- **C3b-6 (R4).** Клавіатура: Enter на «← Усі курси» → фокус на `main#main`, наступний Tab — перший елемент вмісту сторінки. Зміна сторінки каталогу фокус не рухає.
+- **C3b-7.**
+  - Заголовок вкладки змінюється після кожної навігації без перезавантаження: курс → назва курсу, каталог → «Каталог».
+  - Меню-картка хедера закривається (наявна поведінка `onBeforeNavigate`).
+- **C3b-8 (R6).** Unit: перехід замовлення в `paid` інвалідує обидва ключі членства.
+
+Non-goals:
+- звичайні `<a>` у `NotFound`/`PageError` кореня (G0, лишаються повним завантаженням);
+- інвалідація публічних ключів після записів адмінки (не потрібна завдяки R2);
+- `useHref` з `basepath`;
+- стани каталогу (уже свої);
+- головна (C1 відкладено, `#values` лише перевіряється).
+
+**Рішення автора, 2026-11-23** (закривають альтернативи; перевірка — таблиця нижче): R2 — перехід між поверхнями лишається повним завантаженням; R3 — повтор лишається повним завантаженням; R4 — фокус на `#main`, а не на `h1` (ціль, яка є в обох оболонках і вже служить для skip-link).
+
+### Перевірки на кожен пункт
+
+| Пункт | Unit / route | Браузер (e2e або замір) |
+|---|---|---|
+| R1, C3b-1 | `__root.test.tsx`: клік по React Aria `Link` змінює `router.state.location` без `reloadDocument`; Ctrl-клік — ні | новий `catalog.spec.ts` (гість, без входу): лічильник `request.resourceType() === 'document'` = 0 після першого для кожного переходу C3b-1; Ctrl-клік відкриває `context.waitForEvent('page')` |
+| R2, C3b-2 | unit для функції поверхні та `navigate`: `/courses` → `/admin` = `reloadDocument`, `/admin` → `/admin/users` = ні, `/teach` → `/courses` = так | e2e адміна (наявна збережена сесія, без нового входу): «Переглянути курс» → один `document`; навігація адмінки → 0 |
+| R3, R5, C3b-3, C3b-4 | route-тест `courses.$slug`: 503 → `CourseFailure` з посиланням повтору й `reloadDocument`; pending → `CourseLoading` | `catalog.spec.ts`: `page.route` на `**/api/v1/courses/<slug>` (503, потім пропуск; затримка 1,5 с) — працює лише для клієнтського запиту, SSR його не бачить |
+| C3b-5 | route-тест: `course_not_found` під час клієнтської навігації → 404 | `catalog.spec.ts`: клік по картці каталогу, коли `page.route` підміняє клієнтську відповідь `GET /api/v1/courses/<slug>` на 404 `course_not_found` |
+| R4, C3b-6 | unit: після `navigate` з новим `pathname` `document.activeElement` = `#main`; після зміни пошуку — ні | `catalog.spec.ts`: клавіатура Enter → `expect(page.locator('#main')).toBeFocused()` |
+| C3b-7 | — | у тих самих e2e: `toHaveTitle` |
+| R6, C3b-8 | `purchase-queries.test.ts` | — |
+| Увесь зріз | — | повний e2e (усі spec ходять через ці посилання); 6 в'юпортів + 200 %/320 для станів C3b-3/4 + axe |
+
+Зелений агрегатний гейт не замінює рядок таблиці. Ліміт входів e2e (7 з 7) не змінюється: нові e2e — гість і наявні збережені сесії.
+
+**Відкат.** Лише фронтенд, revert комітів зрізу. Даних, міграцій і змін API немає.
+
+**Small/full.** Спільна поведінка всіх посилань і фокусу → **повний e2e**.
+
+**Scoped impact.** Код:
+- `frontend/src/routes/__root.tsx` (провайдер, фокус);
+- новий `frontend/src/app/router/aria-router.ts` (поверхня, `navigate`);
+- `modules/admin/ui/AdminShell.tsx:93`;
+- `presentation/ui/states.tsx`;
+- `modules/catalog/ui/CatalogStates.tsx` або новий `CourseStates.tsx`;
+- `routes/courses.$slug.tsx`;
+- `app/composition/purchase-queries.ts`;
+- локалі uk/en.
+
+Тести: `__root.test.tsx`, `route-guards.test.tsx` (createTestRouter — за потреби провайдер), `purchase-queries.test.ts`, `catalog.spec.ts`, e2e адміна. Root `cbad6649`, гілка `design-pass-c3b`.
+
+**Планова критика / defense.** Ред. 1 — чотири окремі лінзи (окремі процеси Codex, `_wip-review-c3b-lens-<lens>.md`) + defense (`_wip-review-c3b-defense.md`).
+
+**Рев'ю-блок.** task `design-pass C3b` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `prepared`.
+
+**Допуск: NOT READY** — до вердикту планової критики.
