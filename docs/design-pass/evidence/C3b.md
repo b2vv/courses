@@ -21,6 +21,15 @@
 | C3b-7 | — | The tab title follows each move: course → «<назва> — CourseForge», catalog → «Каталог курсів — CourseForge». The menu card closes (existing `onBeforeNavigate`) | PASS |
 | C3b-8 (R6) | A paid order left a cached «not a member» | A move into `paid` invalidates `['enrollment','membership']` and `['enrollment','myMemberships']` once. A page opened on an already paid order does too. `paid` → `paid` does not repeat it (unit) | PASS |
 
+## Found by the code review and fixed
+
+A move inside the app keeps the query cache that a full page load used to drop. Lesson links in the learning outline used to load a document, and now they move inside the app. Two things followed from that.
+
+- **The lesson player resumed from a cached position.** `LessonPlayer.tsx:168-172` resumes from the cached lesson's `position` and continues its `clientSeq`. Now every entry into `/learn/$` (the course and each lesson) and into `/learn` reads past the cache (`ensureRouteQuery(…, { fresh: true })`, `staleTime: 0`), with no exemption. Two exemptions were tried first: a 2 s window, then a history-state mark on the «continue» redirect. Each let a fast move or Back resume from a position read before the last heartbeat (review rounds 3 and 4). The cost is one more course read on the `/learn/<slug>` redirect.
+- **The next lesson showed old completion and review eligibility.** A `nav` or `ended` heartbeat now invalidates the learning course and `['learn','review',courseId]` (`refreshAfterHeartbeat`). The next lesson, already mounted, then shows completion and the review form. Its player is not reset: `clientSeq` and the resume position are read once, at mount.
+- **Tests.** `route-guards.test.tsx`: every lesson entry reads the course, including a real history Back, and a `nav` refresh reaches the mounted lesson. `learn-queries.test.ts`: which heartbeat reasons refresh. Mutation checks: with no fresh read on a lesson entry, with a redirect exemption, or with a 2 s window, the route test fails.
+- **Not fixed (same kind as before C3b).** If lesson A's own `nav` heartbeat is still on its way when A is entered again, the fresh read can return the position from before that heartbeat. A full page load had the same race. This is not a beacon on unload: none exists in the code (review rounds 4 and 5). It is a new page's read racing an unsent or unfinished heartbeat. Review round 5 found no mechanism that makes it larger.
+
 ## Found and fixed during verification (not in the plan)
 
 - **The failed course page was an inline block with an h2.** The course 404 and the site error page are a `StatusPage` with an h1. The failure now uses the same page, with a retry and a way to the catalog (`00dcdbbe`).
@@ -40,7 +49,7 @@ Keyboard: real key presses in Chromium (Playwright `keyboard.press`), see C3b-6.
 
 ## Tests
 
-- **Unit:** 1578 passed, the whole frontend, on `663b2179`.
+- **Unit:** 1585 passed, the whole frontend, on `165197ae` (1578 on `663b2179`).
   - `aria-router.test.ts`: the surface of each path, `reloadDocument` across surfaces and for a retry, search and hash kept.
   - `route-guards.test.tsx`, «moves inside the app»: a React Aria link moves through the router and focus goes to `#main`; focus kept on a surviving control; `body` → `#main`; two moves in a row give one focus; the course failure for `dependency_unavailable` and `invalid_response`; the course loading state; the course 404 heading, tab title and way back.
   - `CatalogView.test.tsx`: the course loading text; only the pending form is `inert`; the retry asks for `{ reloadDocument: true }`.
@@ -63,7 +72,11 @@ Keyboard: real key presses in Chromium (Playwright `keyboard.press`), see C3b-6.
 | Plan rev. 3 | the same three | 1 shared finding (the pending field disappears) | `*-r3.md` |
 | Plan rev. 4 | the same three | 1 shared finding (`inert` hides the status) | `*-r4.md` |
 | Plan rev. 5 | the same three | **ACCEPTED**, 0 gaps | `*-r5.md` |
-| Code | Codex | pending | — |
+| Code `8d864fd4` | Codex | BLOCK — P2 learning cache kept by moves inside the app (old resume position and heartbeat sequence); P2 full e2e not run | `_wip-review-c3b-code.md` |
+| Fix `fe6f5b7c` | Codex | BLOCK — P2 the last `nav` heartbeat lands after the next lesson read the course; P2 review eligibility stale; P3 double read on `/learn/<slug>` | `-r2.md` |
+| Fix `8fe63e72` | Codex | BLOCK — P2 the 2 s reuse window resumes a fast A→B→A from an old position | `-r3.md` |
+| Fix `294ec245` | Codex | BLOCK — P2 the redirect mark is reused on Back within its window | `-r4.md` |
+| Fix `165197ae` | Codex | **PASS** | `-r5.md` |
 
 ## Not done here
 
