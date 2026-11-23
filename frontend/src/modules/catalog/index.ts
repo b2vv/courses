@@ -19,4 +19,11 @@ export { CourseView, Reviews, enrollErrorKey } from './ui/CourseView';
 export { HomeView } from './ui/HomeView';
 export { RatingSummary } from './ui/RatingSummary';
 export { ValueStrip } from './ui/ValueStrip';
-export { CatalogFailure, CatalogLoading, CourseNotFound } from './ui/CatalogStates';
+export {
+  CatalogFailure,
+  CatalogListFailure,
+  CatalogListLoading,
+  CatalogLoading,
+  CourseNotFound,
+} from './ui/CatalogStates';
+export type { CatalogSortChange } from './ui/CatalogView';

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -796,6 +797,67 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		got, err = repository.GetPublished(ctx, "go-backend-foundations")
 		if err != nil || got.Rating != nil {
 			t.Fatalf("republished rating=%+v err=%v", got.Rating, err)
+		}
+	})
+	t.Run("C2b an empty course leaves the list after the window, keeps its page", func(t *testing.T) {
+		// Fixtures are scoped by a title no other subtest uses and removed afterwards, so the
+		// catalog's published set is unchanged for later subtests.
+		t.Cleanup(func() {
+			for _, statement := range []string{
+				`DELETE FROM course_lessons WHERE id='70000000-0000-4000-8000-0000000c2b01'`,
+				`DELETE FROM course_modules WHERE id='60000000-0000-4000-8000-0000000c2b01'`,
+				`DELETE FROM courses WHERE id::text LIKE '90000000-0000-4000-8000-0000000c2b0%'`,
+			} {
+				if _, err := pool.Exec(context.Background(), statement); err != nil {
+					t.Errorf("cleanup %q: %v", statement, err)
+				}
+			}
+		})
+		since := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+		// id suffix · slug · created · published; only window-old-full gets a lesson.
+		for _, fixture := range []struct{ id, slug, created, published string }{
+			{"1", "window-old-empty", "2026-01-01T00:00:00Z", "2026-05-31T23:59:59Z"},
+			{"2", "window-edge-empty", "2026-01-01T00:00:00Z", "2026-06-01T00:00:00Z"},
+			{"3", "window-fresh-empty", "2025-01-01T00:00:00Z", "2026-06-10T00:00:00Z"},
+			{"4", "window-old-full", "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z"},
+		} {
+			if _, err := pool.Exec(ctx, `INSERT INTO courses (id,instructor_id,slug,title,summary,description,status,created_at,updated_at,published_at)
+				VALUES ($1::uuid,'40000000-0000-4000-8000-000000000002',$2,'Window fixture','Window fixture summary','Fixture description','published',$3,$4,$4)`,
+				"90000000-0000-4000-8000-0000000c2b0"+fixture.id, fixture.slug, fixture.created, fixture.published); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_modules (id,course_id,title,position) VALUES ('60000000-0000-4000-8000-0000000c2b01','90000000-0000-4000-8000-0000000c2b04','Module',0);
+			INSERT INTO course_lessons (id,module_id,title,position) VALUES ('70000000-0000-4000-8000-0000000c2b01','60000000-0000-4000-8000-0000000c2b01','Lesson',0)`); err != nil {
+			t.Fatal(err)
+		}
+		slugs := func(page domain.Page) []string {
+			var got []string
+			for _, item := range page.Items {
+				got = append(got, item.Slug)
+			}
+			return got
+		}
+		q, _ := domain.NewQuery(20, 0, "Window fixture", "title")
+		q.EmptyListedSince = since
+		page, err := repository.ListPublished(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Hidden: empty and published one second before the window. Shown: empty at the edge
+		// (inclusive), empty and published inside the window although created long before it,
+		// and a course with a lesson whatever its date. The count matches the list.
+		if want := []string{"window-edge-empty", "window-fresh-empty", "window-old-full"}; !slices.Equal(slugs(page), want) || page.Total != 3 {
+			t.Fatalf("windowed list = %v total %d, want %v total 3", slugs(page), page.Total, want)
+		}
+		// The zero value hides nothing.
+		q.EmptyListedSince = time.Time{}
+		if page, err = repository.ListPublished(ctx, q); err != nil || page.Total != 4 || len(page.Items) != 4 {
+			t.Fatalf("unwindowed list = %v total %d err %v", slugs(page), page.Total, err)
+		}
+		// Leaving the list does not close the course's own page.
+		if course, err := repository.GetPublished(ctx, "window-old-empty"); err != nil || course.LessonCount != 0 {
+			t.Fatalf("hidden course page: %+v %v", course.Course, err)
 		}
 	})
 	t.Run("database constraints reject invalid entities", func(t *testing.T) {

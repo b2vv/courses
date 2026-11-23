@@ -16,9 +16,16 @@ LEFT JOIN LATERAL (
   JOIN course_modules ON course_modules.id = course_lessons.module_id
   WHERE course_modules.course_id = courses.id
 ) AS lessons ON true
+-- A course with no lessons leaves the list once it has been published longer than the
+-- catalog's window (design-pass C2b); the count below repeats the same predicate.
 WHERE status = 'published'
   AND (sqlc.arg(search_pattern)::text = ''
        OR search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text))
+  AND (courses.published_at >= sqlc.arg(empty_listed_since)::timestamptz
+       OR EXISTS (
+         SELECT 1 FROM course_lessons
+         JOIN course_modules ON course_modules.id = course_lessons.module_id
+         WHERE course_modules.course_id = courses.id))
 ORDER BY
   CASE WHEN sqlc.arg(sort_by)::text = 'title' THEN title COLLATE "C" END ASC,
   CASE WHEN sqlc.arg(sort_by)::text = 'recent' THEN published_at END DESC,
@@ -29,7 +36,12 @@ LIMIT sqlc.arg(page_limit)::integer OFFSET sqlc.arg(page_offset)::integer;
 SELECT count(*) FROM courses
 WHERE status = 'published'
   AND (sqlc.arg(search_pattern)::text = ''
-       OR search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text));
+       OR search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text))
+  AND (courses.published_at >= sqlc.arg(empty_listed_since)::timestamptz
+       OR EXISTS (
+         SELECT 1 FROM course_lessons
+         JOIN course_modules ON course_modules.id = course_lessons.module_id
+         WHERE course_modules.course_id = courses.id));
 
 -- name: GetPublishedCourse :many
 SELECT
