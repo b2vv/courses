@@ -27,7 +27,7 @@ The repository re-validated the query with `domain.NewQuery`, which dropped the 
 
 - `go test ./internal/course/...` and `go vet` pass; integration `./internal/course/adapters/postgres` passes (Kiri, testcontainers).
 - e2e `catalog.spec.ts`: 6 passed on the live stack.
-- Ordered `make check`: not run yet.
+- Ordered `make check` on `1f94eabc` (C2 + C2b together), Kiri, 06:32–07:04 UTC: **GATE_EXIT=0** — frontend unit 1508 passed, 0 failed; e2e 170 passed.
 
 ## Independent review
 
