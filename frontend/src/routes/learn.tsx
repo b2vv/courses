@@ -19,6 +19,8 @@ export const Route = createFileRoute('/learn')({
           context.queryClient,
           context.enrollment.myMemberships(),
           abortController.signal,
+          // Progress changes as the viewer watches; read it fresh on every entry (C3b).
+          { fresh: true },
         )
       : undefined,
   head: ({ match }) => pageTitleHead(match.context.i18n, 'myLearning'),

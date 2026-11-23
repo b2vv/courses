@@ -3112,3 +3112,74 @@ describe('moves inside the app (design-pass C3b, plan §17)', () => {
     await waitFor(() => expect(router.state.resolvedLocation?.pathname).toBe('/courses'));
   });
 });
+
+test('C3b review: each entry into a lesson reads the course afresh, so the player resumes from the stored position', async () => {
+  const student = user('student');
+  const lessonA = '30000000-0000-4000-8000-0000000000a1';
+  const lessonB = '30000000-0000-4000-8000-0000000000b1';
+  const lesson = (id: string, title: string, position: number, clientSeq: number) => ({
+    id,
+    title,
+    videoState: 'ready' as const,
+    position,
+    completed: false,
+    clientSeq,
+    audioTracks: [],
+    isPreview: false,
+    locked: false,
+  });
+  let reads = 0;
+  const course = (): LearningCourse => ({
+    id: '10000000-0000-4000-8000-0000000000c1',
+    slug: 'fresh',
+    title: 'Fresh course',
+    summary: 'Practice',
+    description: 'Learn.',
+    status: 'published',
+    price: null,
+    continueLessonId: lessonA,
+    modules: [
+      {
+        id: '20000000-0000-4000-8000-0000000000c1',
+        title: 'Basics',
+        // The server's position for lesson A grows as the viewer watches it.
+        lessons: [lesson(lessonA, 'First', reads * 10, reads), lesson(lessonB, 'Second', 0, 0)],
+      },
+    ],
+  });
+  answerWith(student);
+  const router = createTestRouter(
+    `/learn/fresh/${lessonA}`,
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => {
+        reads += 1;
+        return { ok: true, value: course() };
+      },
+    },
+  );
+  await router.load();
+  renderRouter(router);
+  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
+  expect(reads).toBe(1);
+  await act(async () => {
+    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonB}` } });
+  });
+  expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
+  await act(async () => {
+    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonA}` } });
+  });
+  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
+  // One read per entry, within the cache's minute: the third entry sees the newest position.
+  expect(reads).toBe(3);
+  const cached = router.options.context.queryClient.getQueryData<LearningCourse>(
+    learningCourseQueryKey('fresh'),
+  );
+  expect(cached?.modules[0]?.lessons[0]?.position).toBe(30);
+  expect(cached?.modules[0]?.lessons[0]?.clientSeq).toBe(3);
+});

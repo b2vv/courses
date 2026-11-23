@@ -43,10 +43,13 @@ export const Route = createFileRoute('/learn/$')({
   beforeLoad: async ({ context, params, abortController }) => {
     const courseSlug = parseCourseRoute(params._splat);
     if (courseSlug !== null) {
+      // Fresh on every entry: «continue» moves as the viewer watches, and a move inside the app
+      // keeps the cached course a full page load used to drop (C3b).
       const course = await ensureRouteQuery(
         context.queryClient,
         context.learn.course(courseSlug),
         abortController.signal,
+        { fresh: true },
       );
       if (course.continueLessonId === null) return { lessonRoute: null };
       throw redirect({
@@ -58,10 +61,14 @@ export const Route = createFileRoute('/learn/$')({
     const lessonRoute = parseLessonRoute(params._splat);
     if (lessonRoute === null) return { lessonRoute: null };
     context.learn.primeAv1Probe();
+    // Fresh on every entry: the player resumes from the lesson's stored position and continues
+    // its heartbeat sequence (`LessonPlayer`: `resumeFrom`, `clientSeq`); a cached course from an
+    // earlier visit would resume from an old position with an old sequence number (C3b).
     const course = await ensureRouteQuery(
       context.queryClient,
       context.learn.course(lessonRoute.slug),
       abortController.signal,
+      { fresh: true },
     );
     if (!lessonInCourse(course, lessonRoute.lessonId).ok) throw notFound();
     return { lessonRoute };
