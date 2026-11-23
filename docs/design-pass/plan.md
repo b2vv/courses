@@ -351,6 +351,18 @@ Non-goals: C3b (#11 і page-level loading/error маршруту курсу); т
 
 **Планова критика / defense.** Ред. 2: 4/4 лінзи повернулись (ai-slop 0, complexity 0, logical-gaps 1, edge-cases 2 блокери), defense — 1 пробіл (D3); виправлено в ред. 3; повторно — ті лінзи, яких торкнулась зміна (logical-gaps, edge-cases) + defense. Ред. 3: logical-gaps 0, defense 0 пробілів, edge-cases 2 блокери (401 запису, безмежний повтор) → ред. 4; повторно — edge-cases + defense. Ред. 1: Codex BLOCKED (`_wip-review-c3-plan.md`, одна сесія замість чотирьох лінз — 0 з 4 окремих лінз запущено). Ред. 2: чотири окремі лінзи (окремі процеси Codex, окремі журнали `_wip-review-c3-lens-<lens>.md`) + defense (`_wip-review-c3-defense.md`).
 
-**Рев'ю-блок.** task `design-pass C3` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED; ред. 2: `verdict_received` BLOCKED (3 блокери + D3); ред. 3: `verdict_received` BLOCKED (edge-cases 2); ред. 4: `prepared`.
+**Рев'ю-блок.** task `design-pass C3` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED; ред. 2: `verdict_received` BLOCKED (3 блокери + D3); ред. 3: `verdict_received` BLOCKED (edge-cases 2); ред. 4: `verdict_received` — **ACCEPTED**.
 
-**Допуск: BLOCKED** до вердикту планової критики ред. 4.
+**Вердикт планової критики (ред. 4, `e3462fbe`).** Лінзи — 4 запущено / 4 повернулось, кожна окремим процесом Codex: ai-slop 0 і complexity 0 (ред. 2, поза зміненими частинами), logical-gaps 0 (ред. 3; зміна ред. 4 — лише правило `401`, зона edge-cases), edge-cases 0 (ред. 4). Defense (ред. 4): 0 пробілів.
+
+| # | Питання defense | Закрито рядками цього розділу | Вердикт |
+|---|---|---|---|
+| 1 | Невалідний вхід | A2 (невалідна відповідь → A2), allowlist `returnTo` у C3-1 | closed |
+| 2 | Збій залежності | A1/A2, правило `401`, C3-4 (коди покупки) | closed |
+| 3 | Гонка й повтор | правило `401` (один автоповтор), C3-4 (`isPending`, наявне pending-замовлення, колбек лише поки сторінка відкрита), ключі з користувачем (C3-11) | closed |
+| 4 | Порожні й межові дані | таблиця A1–A9 (`lessons = 0`), C3-5 (заміри), C3-7 (рейтинг нижче порогу) | closed |
+| 5 | Відкат | «Відкат» | closed |
+
+Журнали: `_wip-review-c3-plan.md` (ред. 1), `_wip-review-c3-lens-*.md` (ред. 2), `*-r3.md`, `*-r4.md`.
+
+**Допуск: READY** (вердикт ACCEPTED на ред. 4; власник — рішення 2026-11-23).
