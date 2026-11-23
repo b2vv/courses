@@ -340,6 +340,14 @@ describe('catalog presentation', () => {
     expect((screen.getByRole('combobox', { name: 'Сортування' }) as HTMLSelectElement).value).toBe(
       'recent',
     );
+    // The field's own state follows too: hovering and focusing it re-renders the input, which
+    // must not bring the earlier text back (Codex review C2 R2).
+    await user.hover(screen.getByRole('textbox', { name: 'Знайти курс' }));
+    await user.click(screen.getByRole('textbox', { name: 'Знайти курс' }));
+    rerender(<CatalogView page={firstPage} query={{ ...initialQuery, q: 'Go', sort: 'recent' }} />);
+    expect((screen.getByRole('textbox', { name: 'Знайти курс' }) as HTMLInputElement).value).toBe(
+      'Go',
+    );
   });
 
   it('keeps the heading and the editable search while the list loads', () => {

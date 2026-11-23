@@ -27,17 +27,15 @@ export function CatalogFrame({ query, total, onSortChange, children }: CatalogFr
   const { t } = useTranslation();
   const formRef = useRef<HTMLFormElement>(null);
   // The controls are uncontrolled (the form submits natively without JS), and client navigation
-  // keeps this component mounted. When the address changes under them (Back/Forward after a sort
-  // change) they are brought back in line with it; a control that already matches is left alone,
-  // so the focused sort list is not disturbed (Codex review C2 R1).
+  // keeps this component mounted, so they must follow the address when it changes under them
+  // (Back/Forward after a sort change; Codex review C2 R1, R2). The text field keeps its own
+  // React Aria state, so it is re-created for a new query (`key` below) rather than patched in
+  // the DOM. The native sort list has no such state; it is set in place, and only when it
+  // differs, so the list keeps focus after the user changes it.
   useEffect(() => {
-    const form = formRef.current;
-    if (!form) return;
-    const field = form.elements.namedItem('q');
-    if (field instanceof HTMLInputElement && field.value !== query.q) field.value = query.q;
-    const sort = form.elements.namedItem('sort');
+    const sort = formRef.current?.elements.namedItem('sort');
     if (sort instanceof HTMLSelectElement && sort.value !== query.sort) sort.value = query.sort;
-  }, [query.q, query.sort]);
+  }, [query.sort]);
   const changeSort = (event: ChangeEvent<HTMLSelectElement>) => {
     if (!onSortChange) return;
     const value = event.currentTarget.value === 'title' ? 'title' : 'recent';
@@ -58,6 +56,7 @@ export function CatalogFrame({ query, total, onSortChange, children }: CatalogFr
       <search>
         <form ref={formRef} className="catalog-search" action="/courses" method="get">
           <TextField
+            key={query.q}
             label={t('catalog.search')}
             name="q"
             defaultValue={query.q}

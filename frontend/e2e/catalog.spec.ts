@@ -129,4 +129,12 @@ test('changing the sort applies at once, keeps focus and follows Back', async ({
   await expect(page.getByRole('heading', { name: 'React: доступні інтерфейси' })).toBeVisible();
   await expect(field).toHaveValue('React');
   await expect(sort).toHaveValue('recent');
+  // Interacting with the field re-renders it; the earlier text must not come back.
+  await field.hover();
+  await field.click();
+  await expect(field).toHaveValue('React');
+  await page.goForward();
+  await expect(page).toHaveURL(/[?&]q=Go&sort=title/);
+  await expect(field).toHaveValue('Go');
+  await expect(sort).toHaveValue('title');
 });
