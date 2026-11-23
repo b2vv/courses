@@ -1,5 +1,5 @@
 import { createFileRoute, notFound, useNavigate } from '@tanstack/react-router';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
@@ -60,8 +60,13 @@ function CourseRoute() {
   // refetch on their own (focus, reconnect), so a settled failure stays settled until the user
   // retries.
   const cycle = `${userId}:${data.id}`;
-  // Read only by the query functions and the retry handler, never during render.
+  // Read only by the query functions, the retry handler and the effect below, never during
+  // render. It holds the current cycle only: a new viewer or course starts from nothing, so
+  // returning to an earlier viewer never reuses that viewer's old re-read.
   const sessionRechecks = useRef(new Map<string, Promise<unknown>>());
+  useEffect(() => {
+    sessionRechecks.current.clear();
+  }, [cycle]);
   const withSessionRecheck = async <T,>(read: () => Promise<T>): Promise<T> => {
     try {
       return await read();

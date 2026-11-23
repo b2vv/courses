@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, test } from '@rstest/core';
 import {
   focusManager,
+  onlineManager,
   queryOptions,
   QueryClient,
   QueryClientProvider,
@@ -2670,6 +2671,8 @@ describe('course page access (design-pass C3, plan §16 A1–A9 and the 401 rule
     await act(async () => {
       focusManager.setFocused(false);
       focusManager.setFocused(true);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
     expect(reads).toBe(2);
@@ -2842,6 +2845,108 @@ describe('course page access (design-pass C3, plan §16 A1–A9 and the 401 rule
     expect(await within(box()).findByRole('alert')).toBeTruthy();
     expect(within(box()).getByRole('alert').textContent).toBe('Цей курс зараз не можна купити.');
     await waitFor(() => expect(membershipReads).toBeGreaterThan(readsBefore));
+  });
+
+  it('a viewer who comes back starts a new cycle instead of reusing the old re-read', async () => {
+    let sessionReads = 0;
+    server.use(
+      http.get(currentUserUrl, () => {
+        sessionReads += 1;
+        return HttpResponse.json(user('student'));
+      }),
+    );
+    const other: AuthenticatedUser = {
+      ...user('student'),
+      id: '40000000-0000-4000-8000-000000000009',
+    };
+    let reads = 0;
+    const router = open(user('student'), {
+      membership: async () => {
+        reads += 1;
+        return unauthenticated;
+      },
+    });
+    renderRouter(router);
+    expect(await within(await screen.findByRole('complementary')).findByRole('alert')).toBeTruthy();
+    expect([reads, sessionReads]).toEqual([2, 1]);
+    const client = router.options.context.queryClient;
+    await act(async () => {
+      client.setQueryData(sessionQueryKey, other);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await act(async () => {
+      client.setQueryData(sessionQueryKey, user('student'));
+      // The earlier viewer's failed entry is cached; a fresh read is a new cycle.
+      await client.resetQueries({ queryKey: enrollmentMembershipQueryKey(course.id) });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await waitFor(() => expect(sessionReads).toBeGreaterThanOrEqual(3));
+  });
+
+  it('a purchase 401 without a session turns the box into the guest sign-in', async () => {
+    const paidCourse: CourseDetail = {
+      ...course,
+      price: { minor: 189000, currency: 'UAH' },
+      paid: true,
+    };
+    const router = createTestRouter(
+      `/courses/${course.slug}`,
+      user('student'),
+      'uk',
+      [],
+      {},
+      [],
+      {},
+      {},
+      transcriptStub,
+      discussionStub,
+      undefined,
+      {
+        ...purchaseStub,
+        start: async () => ({ ok: false, error: { code: 'authentication_required' } }),
+      },
+      { course: paidCourse },
+    );
+    renderRouter(router);
+    await userEvent.click(
+      await within(await screen.findByRole('complementary')).findByRole('button', {
+        name: 'Купити курс',
+      }),
+    );
+    expect(await screen.findByRole('link', { name: 'Увійти, щоб купити' })).toBeTruthy();
+  });
+
+  it("never shows a previous instructor's authorship, even when it answers late", async () => {
+    server.use(signedInAs('instructor'));
+    const other: AuthenticatedUser = {
+      ...user('instructor'),
+      id: '40000000-0000-4000-8000-000000000008',
+    };
+    let release: (() => void) | undefined;
+    let calls = 0;
+    const router = open(user('instructor'), {
+      readDetail: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          return adminTree(user('instructor'));
+        }
+        throw new AuthoringQueryError({ code: 'course_forbidden' });
+      },
+    });
+    renderRouter(router);
+    await waitFor(() => expect(release).toBeDefined());
+    await act(async () => {
+      router.options.context.queryClient.setQueryData(sessionQueryKey, other);
+    });
+    expect(await within(box()).findByRole('button', { name: 'Записатися' })).toBeTruthy();
+    await act(async () => {
+      release?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(screen.queryByRole('heading', { name: 'Це ваш курс' })).toBeNull();
   });
 
   it('keys membership by viewer so another account never sees it', () => {
