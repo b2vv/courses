@@ -1,4 +1,37 @@
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { test, expect } from '@playwright/test';
+import { deleteE2ECourse } from './course-cleanup';
+
+const execute = promisify(execFile);
+const root = fileURLToPath(new URL('../../', import.meta.url));
+
+// Fixture-only SQL through Compose psql, as in the other specs: a publication date 31 days in
+// the past cannot be made through the product. What is checked - the catalog list, its count
+// and the course page - goes through the production HTTP and UI path.
+async function sql(statement: string) {
+  await execute(
+    'docker',
+    [
+      'compose',
+      'exec',
+      '-T',
+      'postgres',
+      'psql',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-U',
+      'courses',
+      '-d',
+      'courses',
+      '-c',
+      statement,
+    ],
+    { cwd: root, timeout: 60_000 },
+  );
+}
 
 test('catalog and detail include PostgreSQL course data in initial HTML', async ({
   browser,
@@ -140,4 +173,38 @@ test('changing the sort applies at once, keeps focus and follows Back', async ({
   await field.hover();
   await field.click();
   await expect(field).toHaveValue('Go');
+});
+
+test('a course with no lessons leaves the catalog 30 days after publication (C2b)', async ({
+  page,
+  request,
+}) => {
+  const id = randomUUID();
+  // One alphanumeric token, so the catalog search scopes the check to this fixture alone.
+  const token = `c2bwindow${id.replaceAll('-', '').slice(0, 12)}`;
+  const slug = `c2b-window-${id.slice(0, 8)}`;
+  await sql(
+    `INSERT INTO courses (id,instructor_id,slug,title,summary,description,status,created_at,updated_at,published_at)
+     VALUES ('${id}','40000000-0000-4000-8000-000000000002','${slug}','${token} course','${token} summary','Fixture description','published',now() - interval '40 days',now(),now() - interval '31 days')`,
+  );
+  try {
+    const hidden = await request.get(`/api/v1/courses?q=${token}`);
+    expect(hidden.status()).toBe(200);
+    expect(await hidden.json()).toMatchObject({ items: [], pagination: { total: 0 } });
+    await page.goto(`/courses?q=${token}`);
+    await expect(page.getByText('Курсів не знайдено')).toBeVisible();
+    // Leaving the list does not close the course's own page.
+    const detail = await page.goto(`/courses/${slug}`);
+    expect(detail?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${token} course`);
+
+    await sql(`UPDATE courses SET published_at = now() - interval '29 days' WHERE id = '${id}'`);
+    await page.goto(`/courses?q=${token}`);
+    const card = page.locator('.course-list').getByRole('listitem');
+    await expect(card).toHaveCount(1);
+    await expect(card.getByText('Скоро буде')).toBeVisible();
+    await expect(page.getByText('1 курс', { exact: true })).toBeVisible();
+  } finally {
+    await deleteE2ECourse(id);
+  }
 });

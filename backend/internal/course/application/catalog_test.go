@@ -28,7 +28,7 @@ func TestListPublishedCoursesNormalizesQueryAndRetainsPagination(t *testing.T) {
 	repo := &repository{list: func(_ context.Context, query domain.Query) (domain.Page, error) {
 		return domain.Page{Items: []domain.Course{}, Limit: query.Limit, Offset: query.Offset, Total: 3}, nil
 	}}
-	useCases := application.NewCatalog(repo)
+	useCases := application.NewCatalog(repo, time.Now)
 	page, err := useCases.ListPublishedCourses(context.Background(), domain.Query{Limit: 1, Offset: 10, Search: " Go ", Sort: domain.SortTitle})
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestListPublishedCoursesNormalizesQueryAndRetainsPagination(t *testing.T) {
 func TestGetPublishedCourseValidatesSlugAndPropagatesExplicitNotFound(t *testing.T) {
 	useCases := application.NewCatalog(&repository{get: func(context.Context, string) (domain.CourseDetail, error) {
 		return domain.CourseDetail{}, domain.ErrCourseNotFound
-	}})
+	}}, time.Now)
 	if _, err := useCases.GetPublishedCourse(context.Background(), "invalid--slug"); !errors.Is(err, domain.ErrInvalidSlug) {
 		t.Fatalf("got %v", err)
 	}
@@ -60,7 +60,7 @@ func TestReadCancellationReachesRepository(t *testing.T) {
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	_, err := application.NewCatalog(repo).ListPublishedCourses(ctx, domain.Query{Limit: 20, Sort: domain.SortRecent})
+	_, err := application.NewCatalog(repo, time.Now).ListPublishedCourses(ctx, domain.Query{Limit: 20, Sort: domain.SortRecent})
 	if !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("got %v", err)
 	}
@@ -75,11 +75,22 @@ func TestSlowDependencyIsBoundedWithoutCallerCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 	started := time.Now()
-	_, err := application.NewCatalog(repo).GetPublishedCourse(ctx, "slow-course")
+	_, err := application.NewCatalog(repo, time.Now).GetPublishedCourse(ctx, "slow-course")
 	if !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("got %v", err)
 	}
 	if time.Since(started) > 4500*time.Millisecond {
 		t.Fatal("catalog did not apply its bounded read budget")
+	}
+}
+
+func TestListPublishedCoursesHidesEmptyCoursesPublishedBeforeTheWindow(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	repo := &repository{list: func(context.Context, domain.Query) (domain.Page, error) { return domain.Page{}, nil }}
+	if _, err := application.NewCatalog(repo, func() time.Time { return now }).ListPublishedCourses(context.Background(), domain.Query{Limit: 20, Sort: domain.SortRecent}); err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC); !repo.query.EmptyListedSince.Equal(want) {
+		t.Fatalf("EmptyListedSince = %v, want %v (30 days before now)", repo.query.EmptyListedSince, want)
 	}
 }

@@ -3,6 +3,7 @@ package domain
 import (
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -26,7 +27,16 @@ type Query struct {
 	Offset int
 	Search string
 	Sort   Sort
+	// EmptyListedSince hides from the public list a published course that has no lessons
+	// and was published before this instant. The zero value hides nothing.
+	EmptyListedSince time.Time
 }
+
+// EmptyCourseListedDays is how many days a published course with no lessons stays in the
+// public catalog, counted from its publication (owner, 2026-11-23, design-pass C2b). It is
+// still reachable by its own address afterwards.
+const EmptyCourseListedDays = 30
+
 type Page struct {
 	Items  []Course
 	Limit  int

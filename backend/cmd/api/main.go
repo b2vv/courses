@@ -116,7 +116,7 @@ func main() {
 		courseRepository := coursepostgres.NewRepository(dependencies.Database)
 		documents := courseapplication.NewDocuments(courseRepository, courseRepository)
 		documentHandler := coursehttp.NewDocumentHandler(documents)
-		catalog := courseapplication.NewCatalog(courseRepository)
+		catalog := courseapplication.NewCatalog(courseRepository, time.Now)
 		learning := courseapplication.NewLearning(courseRepository)
 		ordersRepository := orderspostgres.NewRepository(dependencies.Database)
 		wayforpayConfig, wayforpayConfigured := wayforpay.FromEnvironment(os.Getenv)

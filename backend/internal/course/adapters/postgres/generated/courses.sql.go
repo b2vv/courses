@@ -81,10 +81,20 @@ SELECT count(*) FROM courses
 WHERE status = 'published'
   AND ($1::text = ''
        OR search_vector @@ websearch_to_tsquery('simple', $1::text))
+  AND (courses.published_at >= $2::timestamptz
+       OR EXISTS (
+         SELECT 1 FROM course_lessons
+         JOIN course_modules ON course_modules.id = course_lessons.module_id
+         WHERE course_modules.course_id = courses.id))
 `
 
-func (q *Queries) CountPublishedCourses(ctx context.Context, searchPattern string) (int64, error) {
-	row := q.db.QueryRow(ctx, countPublishedCourses, searchPattern)
+type CountPublishedCoursesParams struct {
+	SearchPattern    string
+	EmptyListedSince pgtype.Timestamptz
+}
+
+func (q *Queries) CountPublishedCourses(ctx context.Context, arg CountPublishedCoursesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPublishedCourses, arg.SearchPattern, arg.EmptyListedSince)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -493,18 +503,24 @@ LEFT JOIN LATERAL (
 WHERE status = 'published'
   AND ($1::text = ''
        OR search_vector @@ websearch_to_tsquery('simple', $1::text))
+  AND (courses.published_at >= $2::timestamptz
+       OR EXISTS (
+         SELECT 1 FROM course_lessons
+         JOIN course_modules ON course_modules.id = course_lessons.module_id
+         WHERE course_modules.course_id = courses.id))
 ORDER BY
-  CASE WHEN $2::text = 'title' THEN title COLLATE "C" END ASC,
-  CASE WHEN $2::text = 'recent' THEN published_at END DESC,
+  CASE WHEN $3::text = 'title' THEN title COLLATE "C" END ASC,
+  CASE WHEN $3::text = 'recent' THEN published_at END DESC,
   id ASC
-LIMIT $4::integer OFFSET $3::integer
+LIMIT $5::integer OFFSET $4::integer
 `
 
 type ListPublishedCoursesParams struct {
-	SearchPattern string
-	SortBy        string
-	PageOffset    int32
-	PageLimit     int32
+	SearchPattern    string
+	EmptyListedSince pgtype.Timestamptz
+	SortBy           string
+	PageOffset       int32
+	PageLimit        int32
 }
 
 type ListPublishedCoursesRow struct {
@@ -524,9 +540,12 @@ type ListPublishedCoursesRow struct {
 	LessonCount    int64
 }
 
+// A course with no lessons leaves the list once it has been published longer than the
+// catalog's window (design-pass C2b); the count below repeats the same predicate.
 func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCoursesParams) ([]ListPublishedCoursesRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedCourses,
 		arg.SearchPattern,
+		arg.EmptyListedSince,
 		arg.SortBy,
 		arg.PageOffset,
 		arg.PageLimit,

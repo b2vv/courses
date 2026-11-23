@@ -25,6 +25,8 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	if err != nil {
 		return domain.Page{}, err
 	}
+	// NewQuery validates only the caller's fields; the listing window is set by the catalog.
+	query.EmptyListedSince = input.EmptyListedSince
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return domain.Page{}, persistenceError(err)
@@ -33,11 +35,12 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	queries := generated.New(tx)
 	// query.Search goes straight into websearch_to_tsquery (full-text match, not an
 	// ILIKE pattern), so no wildcard escaping is needed here.
-	rows, err := queries.ListPublishedCourses(ctx, generated.ListPublishedCoursesParams{SearchPattern: query.Search, SortBy: string(query.Sort), PageLimit: int32(query.Limit), PageOffset: int32(query.Offset)})
+	emptyListedSince := pgtype.Timestamptz{Time: query.EmptyListedSince, Valid: true}
+	rows, err := queries.ListPublishedCourses(ctx, generated.ListPublishedCoursesParams{SearchPattern: query.Search, EmptyListedSince: emptyListedSince, SortBy: string(query.Sort), PageLimit: int32(query.Limit), PageOffset: int32(query.Offset)})
 	if err != nil {
 		return domain.Page{}, persistenceError(err)
 	}
-	total, err := queries.CountPublishedCourses(ctx, query.Search)
+	total, err := queries.CountPublishedCourses(ctx, generated.CountPublishedCoursesParams{SearchPattern: query.Search, EmptyListedSince: emptyListedSince})
 	if err != nil {
 		return domain.Page{}, persistenceError(err)
 	}
