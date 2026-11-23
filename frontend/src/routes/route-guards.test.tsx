@@ -3211,7 +3211,7 @@ test('C3b review: a lesson entry reads the course unless the continue redirect j
   expect(reads).toBe(6);
 });
 
-test('C3b review: a marked entry whose read was invalidated by a nav heartbeat reads again on Back', async () => {
+test('C3b review: Back to the continue redirect entry reads again, even with nothing invalidated', async () => {
   const student = user('student');
   const lessonA = '30000000-0000-4000-8000-0000000000a2';
   let reads = 0;
@@ -3265,17 +3265,13 @@ test('C3b review: a marked entry whose read was invalidated by a nav heartbeat r
   renderRouter(router);
   expect(await screen.findByRole('heading', { name: 'Only' })).toBeTruthy();
   expect(reads).toBe(1);
-  // Leave the learning area (no course read there); the lesson's nav heartbeat invalidates.
+  // Leave the learning area: no course read there, and no invalidation (a heartbeat whose
+  // response has not arrived). The entry's token was taken on the way in, so Back reads again
+  // (Codex delta review).
   await act(async () => {
     await router.navigate({ to: '/courses' });
   });
-  await act(async () => {
-    await refreshAfterHeartbeat(client, {
-      slug: 'marked',
-      courseId: '10000000-0000-4000-8000-0000000000c2',
-      reason: 'nav',
-    });
-  });
+  expect(client.getQueryState(learningCourseQueryKey('marked'))?.isInvalidated).toBe(false);
   await act(async () => {
     router.history.back();
   });

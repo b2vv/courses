@@ -3,7 +3,12 @@ import { expect, test } from '@rstest/core';
 import type { LearningCourse, PlaybackResult } from '../../modules/playback';
 import type { CourseRepository } from '../../modules/catalog';
 import type { PlaybackRepository } from '../../modules/playback';
-import { createLearnQueries, learningCourseQueryKey, refreshAfterHeartbeat } from './learn-queries';
+import {
+  createContinueReads,
+  createLearnQueries,
+  learningCourseQueryKey,
+  refreshAfterHeartbeat,
+} from './learn-queries';
 
 // This test reads only the learning course; the review side of the course repository is unused here.
 const unusedCourses: CourseRepository = {
@@ -109,3 +114,17 @@ test.each([
     expect(client.getQueryState(learningCourseQueryKey('other'))?.isInvalidated).toBe(false);
   },
 );
+
+test('C3b a continue-redirect token is taken once', () => {
+  const tokens = createContinueReads();
+  const token = tokens.issue();
+  expect(tokens.take(undefined)).toBe(false);
+  expect(tokens.take('not-issued')).toBe(false);
+  expect(tokens.take(token)).toBe(true);
+  // A Back to the same history entry brings the same token again: it no longer counts.
+  expect(tokens.take(token)).toBe(false);
+  // Tokens whose lesson never loaded do not pile up.
+  const first = tokens.issue();
+  for (let index = 0; index < 8; index += 1) tokens.issue();
+  expect(tokens.take(first)).toBe(false);
+});

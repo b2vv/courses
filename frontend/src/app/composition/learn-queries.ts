@@ -17,6 +17,32 @@ export function learningCourseQueryKey(slug: string) {
   return ['learn', 'course', slug] as const;
 }
 /**
+ * One-use tokens for the «continue» redirect of `/learn/<slug>` (C3b). The redirect issues one
+ * and puts it in history state; the lesson it leads to takes it, and only that first take lets
+ * the lesson reuse the course read the redirect just made. History keeps the token, but a Back
+ * or Forward to that entry finds it already taken, so it reads again (Codex delta review). Held
+ * per router (request scoped), in memory only; at most a few are ever outstanding.
+ */
+export function createContinueReads() {
+  const issued = new Set<string>();
+  return {
+    issue(): string {
+      const token = crypto.randomUUID();
+      issued.add(token);
+      // A redirect whose lesson never loads leaves its token behind; keep the set small.
+      if (issued.size > 8) {
+        const oldest = issued.values().next().value;
+        if (oldest !== undefined) issued.delete(oldest);
+      }
+      return token;
+    },
+    take(token: string | undefined): boolean {
+      return token !== undefined && issued.delete(token);
+    },
+  };
+}
+
+/**
  * Leaving a lesson (`nav`) or finishing it (`ended`) is what moves completion, «continue» and
  * review eligibility. With lesson links moving inside the app (C3b) the next lesson is already
  * mounted and read its course before that last heartbeat landed, so both are refreshed; other
@@ -54,6 +80,7 @@ function invalidateReviews(client: QueryClient, courseId: string) {
 export function createLearnQueries(playback: PlaybackRepository, courses: CourseRepository) {
   return {
     playback,
+    continueReads: createContinueReads(),
     course: (slug: string) =>
       queryOptions({
         queryKey: learningCourseQueryKey(slug),
