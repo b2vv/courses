@@ -6,6 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey, refreshAfterHeartbeat } from '../app/composition/learn-queries';
@@ -40,7 +41,7 @@ import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
-  beforeLoad: async ({ context, params, abortController }) => {
+  beforeLoad: async ({ context, params, location, abortController }) => {
     const courseSlug = parseCourseRoute(params._splat);
     if (courseSlug !== null) {
       // Fresh on every entry: «continue» moves as the viewer watches, and a move inside the app
@@ -56,6 +57,9 @@ export const Route = createFileRoute('/learn/$')({
         to: '/learn/$',
         params: { _splat: `${course.slug}/${course.continueLessonId}` },
         replace: true,
+        // The course was read just now, for this redirect: the lesson it leads to need not read
+        // it again. Only this redirect carries the mark (C3b review round 3).
+        state: (previous) => ({ ...previous, learningCourseJustRead: true }),
       });
     }
     const lessonRoute = parseLessonRoute(params._splat);
@@ -63,12 +67,15 @@ export const Route = createFileRoute('/learn/$')({
     context.learn.primeAv1Probe();
     // Fresh on every entry: the player resumes from the lesson's stored position and continues
     // its heartbeat sequence (`LessonPlayer`: `resumeFrom`, `clientSeq`); a cached course from an
-    // earlier visit would resume from an old position with an old sequence number (C3b).
+    // earlier visit would resume from an old position with an old sequence number (C3b). The one
+    // exception is the «continue» redirect above, which read it a moment ago. Its mark stays on
+    // the history entry, so a later Back/Forward to it carries the mark too; the read's own age
+    // and invalidation decide, not the mark alone.
     const course = await ensureRouteQuery(
       context.queryClient,
       context.learn.course(lessonRoute.slug),
       abortController.signal,
-      { fresh: true },
+      { fresh: !justReadByRedirect(context.queryClient, lessonRoute.slug, location.state) },
     );
     if (!lessonInCourse(course, lessonRoute.lessonId).ok) throw notFound();
     return { lessonRoute };
@@ -428,4 +435,22 @@ function OpenLesson({
       />
     </CourseLearningView>
   );
+}
+
+declare module '@tanstack/history' {
+  interface HistoryState {
+    /** Set only by the «continue» redirect of `/learn/<slug>` (C3b): the course was just read. */
+    learningCourseJustRead?: boolean;
+  }
+}
+
+/** The «continue» redirect read this course within the last two seconds and nothing invalidated it. */
+function justReadByRedirect(
+  client: QueryClient,
+  slug: string,
+  state: { learningCourseJustRead?: boolean },
+): boolean {
+  if (state.learningCourseJustRead !== true) return false;
+  const read = client.getQueryState(learningCourseQueryKey(slug));
+  return read !== undefined && !read.isInvalidated && Date.now() - read.dataUpdatedAt < 2_000;
 }

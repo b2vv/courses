@@ -3117,7 +3117,7 @@ describe('moves inside the app (design-pass C3b, plan §17)', () => {
   });
 });
 
-test('C3b review: a lesson entry reads the course afresh unless it was just read; leaving a lesson refreshes it', async () => {
+test('C3b review: every lesson entry reads the course afresh except the continue redirect; leaving a lesson refreshes it', async () => {
   const student = user('student');
   const lessonA = '30000000-0000-4000-8000-0000000000a1';
   const lessonB = '30000000-0000-4000-8000-0000000000b1';
@@ -3170,19 +3170,25 @@ test('C3b review: a lesson entry reads the course afresh unless it was just read
   const client = router.options.context.queryClient;
   await router.load();
   renderRouter(router);
-  // `/learn/fresh` redirects to its «continue» lesson: one read for both entries.
+  // `/learn/fresh` redirects to its «continue» lesson: one read serves both entries.
   expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
   expect(reads).toBe(1);
-  // A cached course older than the window is read again on entry (as the full load did).
-  client.setQueryData(learningCourseQueryKey('fresh'), course(), {
-    updatedAt: Date.now() - 60_000,
-  });
+  // Every other entry reads again, even a moment later and with nothing invalidated: a fast
+  // A → B → A must not resume A from the position read on the way in (review round 3).
   await act(async () => {
     await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonB}` } });
   });
   expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
   expect(reads).toBe(2);
-  // Leaving lesson A sends `nav`; its refresh reaches the course the next lesson shows.
+  await act(async () => {
+    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonA}` } });
+  });
+  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
+  expect(reads).toBe(3);
+  let cached = client.getQueryData<LearningCourse>(learningCourseQueryKey('fresh'));
+  expect(cached?.modules[0]?.lessons[0]?.position).toBe(30);
+  expect(cached?.modules[0]?.lessons[0]?.clientSeq).toBe(3);
+  // Leaving a lesson sends `nav`; its refresh reaches the course the mounted lesson shows.
   await act(async () => {
     await refreshAfterHeartbeat(client, {
       slug: 'fresh',
@@ -3190,12 +3196,19 @@ test('C3b review: a lesson entry reads the course afresh unless it was just read
       reason: 'nav',
     });
   });
-  await waitFor(() => expect(reads).toBe(3));
+  await waitFor(() => expect(reads).toBe(4));
+  cached = client.getQueryData<LearningCourse>(learningCourseQueryKey('fresh'));
+  expect(cached?.modules[0]?.lessons[0]?.position).toBe(40);
+  // The redirect's mark stays on its history entry. Coming back to that entry later carries the
+  // mark, but an old read does not count as just read.
+  client.setQueryData(learningCourseQueryKey('fresh'), cached, { updatedAt: Date.now() - 60_000 });
   await act(async () => {
-    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonA}` } });
+    await router.navigate({
+      to: '/learn/$',
+      params: { _splat: `fresh/${lessonB}` },
+      state: { learningCourseJustRead: true },
+    });
   });
-  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
-  const cached = client.getQueryData<LearningCourse>(learningCourseQueryKey('fresh'));
-  expect(cached?.modules[0]?.lessons[0]?.position).toBe(30);
-  expect(cached?.modules[0]?.lessons[0]?.clientSeq).toBe(3);
+  expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
+  expect(reads).toBe(5);
 });

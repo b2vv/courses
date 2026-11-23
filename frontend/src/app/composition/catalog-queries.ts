@@ -29,12 +29,8 @@ function unwrap<T>(result: Result<T>): T {
  *
  * `fresh` reads past the cache on every entry. For pages whose data the viewer changes as a
  * side effect of using another page (watched position, progress): a move inside the app keeps the
- * cache that a full page load used to drop (C3b, review finding on learning progress). An answer
- * read in the last `freshWindowMs` counts as fresh unless it was invalidated, so a redirect chain
- * (`/learn/<slug>` → its lesson) reads once.
+ * cache that a full page load used to drop (C3b, review finding on learning progress).
  */
-export const freshWindowMs = 2_000;
-
 export function ensureRouteQuery<T, TKey extends QueryKey>(
   client: QueryClient,
   options: FetchQueryOptions<T, Error, T, TKey>,
@@ -59,7 +55,7 @@ export function ensureRouteQuery<T, TKey extends QueryKey>(
     };
     signal.addEventListener('abort', abort, { once: true });
     const read = fresh
-      ? client.fetchQuery({ ...options, staleTime: freshWindowMs })
+      ? client.fetchQuery({ ...options, staleTime: 0 })
       : client.ensureQueryData(options);
     void read.then(
       (data) => finish(() => resolve(data)),
