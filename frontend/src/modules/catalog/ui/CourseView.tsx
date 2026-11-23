@@ -1,15 +1,20 @@
 import type { CourseDetail } from '../../../contracts/course';
 import type { PublicReviewPage } from '../../../contracts/course';
-import type { EnrollmentErrorCode, Membership } from '../../enrollment';
+import type { EnrollmentErrorCode } from '../../enrollment';
+import type { PurchaseErrorCode } from '../../purchase';
+import { purchaseErrorKey } from '../../purchase';
 import { Button, Link } from '../../../presentation/ui';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { RatingSummary } from './RatingSummary';
 import { formatDate } from '../../../presentation/format-timestamp';
+import { formatPrice } from '../../../presentation/format-price';
 import { ReportDialog } from '../../enrollment';
+import { lessonTotal, type CourseAction } from './course-action';
 
 export function CourseView({
   course,
+  action = { kind: 'checking' },
   reviews,
   reviewsError = false,
   hasMore = false,
@@ -19,17 +24,20 @@ export function CourseView({
   onRetry = () => {},
   onRetryMore = () => {},
   signedIn = false,
-  viewerIsAdmin = false,
-  membership,
   enrolling = false,
   enrollError,
   onEnroll = () => {},
-  onReportLecturer = async () => {},
+  buying = false,
+  buyError,
+  onBuy = () => {},
+  onRetryAccess = () => {},
+  onReportLecturer = () => Promise.resolve(),
   ownReviewId,
-  onReport = async () => {},
+  onReport = () => Promise.resolve(),
 }: {
   course: CourseDetail;
-  viewerIsAdmin?: boolean | undefined;
+  /** The action box's state, decided by `courseAction` (plan §16 table A1–A9). */
+  action?: CourseAction | undefined;
   reviews?: PublicReviewPage | undefined;
   reviewsError?: boolean | undefined;
   hasMore?: boolean | undefined;
@@ -39,28 +47,51 @@ export function CourseView({
   onRetry?: (() => void) | undefined;
   onRetryMore?: (() => void) | undefined;
   signedIn?: boolean | undefined;
-  membership?: Membership | undefined;
   enrolling?: boolean | undefined;
   enrollError?: EnrollmentErrorCode | undefined;
   onEnroll?: (() => void) | undefined;
+  buying?: boolean | undefined;
+  buyError?: PurchaseErrorCode | undefined;
+  onBuy?: (() => void) | undefined;
+  onRetryAccess?: (() => void) | undefined;
   onReportLecturer?: ((reason: string) => Promise<void>) | undefined;
   ownReviewId?: string | undefined;
   onReport?: ((id: string) => Promise<void>) | undefined;
 }) {
   const { t } = useTranslation();
+  const comingSoon = lessonTotal(course) === 0;
   return (
     <article className="course-detail">
       <div className="detail-heading">
         <Link href="/courses">{t('course.all')}</Link>
-        <p className="eyebrow">{t('catalog.kind')}</p>
         <h1>{course.title}</h1>
-        <p>
-          <RatingSummary rating={course.rating ?? null} />
+        {/* The same line the catalog card shows: coming soon without lessons, else the rating
+            (C3 #7). */}
+        <p className="detail-meta">
+          {comingSoon ? (
+            <span className="ui-pill ui-pill--neutral">{t('catalog.comingSoon')}</span>
+          ) : (
+            <RatingSummary rating={course.rating ?? null} />
+          )}
         </p>
         <p className="lede">{course.summary}</p>
       </div>
+      {/* The action box comes first in reading order, so on a phone it follows the header
+          instead of ending the page; on a wide screen the grid puts it on the right (C3 #5). */}
       <div className="detail-body">
-        <div>
+        <CourseActionBox
+          course={course}
+          action={action}
+          enrolling={enrolling}
+          enrollError={enrollError}
+          onEnroll={onEnroll}
+          buying={buying}
+          buyError={buyError}
+          onBuy={onBuy}
+          onRetryAccess={onRetryAccess}
+          onReportLecturer={onReportLecturer}
+        />
+        <div className="detail-main">
           <section>
             <h2>{t('course.about')}</h2>
             <p className="description">{course.description}</p>
@@ -98,80 +129,172 @@ export function CourseView({
             onReport={onReport}
           />
         </div>
-        <EnrollmentCallToAction
-          course={course}
-          viewerIsAdmin={viewerIsAdmin}
-          membership={membership}
-          enrolling={enrolling}
-          enrollError={enrollError}
-          onEnroll={onEnroll}
-          onReportLecturer={onReportLecturer}
-        />
       </div>
     </article>
   );
 }
 
-function EnrollmentCallToAction({
+function CourseActionBox({
   course,
-  viewerIsAdmin,
-  membership,
+  action,
   enrolling,
   enrollError,
   onEnroll,
+  buying,
+  buyError,
+  onBuy,
+  onRetryAccess,
   onReportLecturer,
 }: {
   course: CourseDetail;
-  viewerIsAdmin: boolean;
-  membership: Membership | undefined;
+  action: CourseAction;
   enrolling: boolean;
   enrollError: EnrollmentErrorCode | undefined;
   onEnroll: () => void;
+  buying: boolean;
+  buyError: PurchaseErrorCode | undefined;
+  onBuy: () => void;
+  onRetryAccess: () => void;
   onReportLecturer: (reason: string) => Promise<void>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [reportSent, setReportSent] = useState(false);
-  // The backend's `member` flag means "a membership row exists", which is true for revoked too;
-  // access follows the STATE. active|blocked are current members; revoked|none are not and may
-  // re-enroll (free) — so branch on state, not the member boolean.
-  const activeMember = membership?.state === 'active' || membership?.state === 'blocked';
-  const blocked = membership?.state === 'blocked';
-  // G8 (Lo19): an administrator is not a learner — they view the course as exempt and start
-  // learning, but never see the enrol call to action.
-  const canEnroll = !activeMember && course.price === null && !viewerIsAdmin;
-  return (
-    <aside className="availability">
-      <h2>{activeMember ? t('enrollment.member') : t('course.learningTitle')}</h2>
-      {activeMember ? (
-        <>
-          {blocked && <output>{t('enrollment.blockedNote')}</output>}
-          <Link href={`/learn/${course.slug}`}>{t('enrollment.startLearning')}</Link>
-          <ReportDialog
-            triggerLabel={t('enrollment.report.lecturer')}
-            onReport={onReportLecturer}
-            onSent={() => setReportSent(true)}
-          />
-          {reportSent ? <output>{t('enrollment.report.sent')}</output> : null}
-        </>
-      ) : canEnroll ? (
-        <>
+  const price = (
+    <p className="course-box-price">
+      {course.price === null ? t('catalog.free') : formatPrice(course.price, i18n.resolvedLanguage)}
+    </p>
+  );
+  const soon = (
+    <>
+      <span className="ui-pill ui-pill--neutral course-box-soon">{t('catalog.comingSoon')}</span>
+      <p>{t('course.comingSoonHint')}</p>
+    </>
+  );
+  const returnTo = encodeURIComponent(`/courses/${course.slug}`);
+  switch (action.kind) {
+    case 'checking':
+      return (
+        <aside className="availability">
+          <h2>{t('course.learningTitle')}</h2>
+          {price}
+          <output>{t('course.checking')}</output>
+        </aside>
+      );
+    case 'unavailable':
+      return (
+        <aside className="availability">
+          <h2>{t('course.learningTitle')}</h2>
+          {price}
+          <div role="alert" className="course-box-alert">
+            <p>{t('course.accessFailed')}</p>
+            <Button variant="secondary" onPress={onRetryAccess}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        </aside>
+      );
+    case 'owner':
+      return (
+        <aside className="availability">
+          <h2>{t('course.ownerTitle')}</h2>
+          {action.comingSoon ? soon : null}
+          <a className="ui-button ui-button--primary" href={`/teach/courses/${course.id}`}>
+            {t('course.edit')}
+          </a>
+        </aside>
+      );
+    case 'admin':
+      // G8 (Lo19): an administrator is not a learner; they open the course without enrolling.
+      return (
+        <aside className="availability">
+          <h2>{t('course.learningTitle')}</h2>
+          {action.comingSoon ? (
+            soon
+          ) : (
+            <Link href={`/learn/${course.slug}`} className="ui-button ui-button--primary">
+              {t('course.startLearning')}
+            </Link>
+          )}
+        </aside>
+      );
+    case 'member':
+      return (
+        <aside className="availability">
+          <h2>{t('enrollment.member')}</h2>
+          {action.blocked && <output>{t('enrollment.blockedNote')}</output>}
+          {action.comingSoon ? (
+            soon
+          ) : (
+            <Link href={`/learn/${course.slug}`} className="ui-button ui-button--primary">
+              {t('enrollment.startLearning')}
+            </Link>
+          )}
+          {/* A complaint is a rare, secondary action: a text button set apart below the main
+              one, never heavier than it (C3 #3). */}
+          <div className="course-box-secondary">
+            <ReportDialog
+              quiet
+              triggerLabel={t('enrollment.report.lecturer')}
+              onReport={onReportLecturer}
+              onSent={() => setReportSent(true)}
+            />
+            {reportSent ? <output>{t('enrollment.report.sent')}</output> : null}
+          </div>
+        </aside>
+      );
+    case 'coming-soon':
+      return (
+        <aside className="availability">
+          <h2>{t('catalog.comingSoon')}</h2>
+          {price}
+          <p>{t('course.comingSoonHint')}</p>
+        </aside>
+      );
+    case 'sign-in':
+      return (
+        <aside className="availability">
+          <h2>{t('course.learningTitle')}</h2>
+          {price}
+          <a className="ui-button ui-button--primary" href={`/login?returnTo=${returnTo}`}>
+            {action.paid ? t('course.signInToBuy') : t('course.signInToEnroll')}
+          </a>
+        </aside>
+      );
+    case 'enroll':
+      return (
+        <aside className="availability">
+          <h2>{t('course.learningTitle')}</h2>
+          {price}
           <p>{t('course.learningHint')}</p>
           {/* Keep focus on this control while the request is in flight. */}
           <Button type="button" onPress={onEnroll} isPending={enrolling}>
             {t('enrollment.enroll')}
           </Button>
-          {enrollError !== undefined && (
+          {enrollError !== undefined && enrollError !== 'authentication_required' && (
             <p role="alert">{t(`enrollment.errors.${enrollErrorKey(enrollError)}`)}</p>
           )}
-        </>
-      ) : (
-        <>
-          <p>{t('course.learningHint')}</p>
-          <Link href={`/learn/${course.slug}`}>{t('course.startLearning')}</Link>
-        </>
-      )}
-    </aside>
-  );
+        </aside>
+      );
+    case 'buy':
+      return (
+        <aside className="availability">
+          <h2>{t('course.learningTitle')}</h2>
+          {price}
+          <Button type="button" onPress={onBuy} isPending={buying}>
+            {t('learn.purchase.buy')}
+          </Button>
+          {buyError !== undefined && buyError !== 'authentication_required' && (
+            <p role="alert">
+              {/* A paid course that cannot be bought again (revoked by an administrator) is
+                  refused by design: say so, not "no connection". */}
+              {buyError === 'course_already_owned'
+                ? t('learn.purchase.errors.notPurchasable')
+                : t(`learn.purchase.errors.${purchaseErrorKey(buyError)}`)}
+            </p>
+          )}
+        </aside>
+      );
+  }
 }
 
 export function enrollErrorKey(

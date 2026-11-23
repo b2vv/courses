@@ -36,17 +36,20 @@ export function createTeachDependencies() {
     if (outcome.status === 200) return mapAuthoringCourseTree(outcome.data, id);
     return { ok: false, error: mapAuthoringError(outcome) };
   };
+  const readDetail = async (id: CourseId, signal: AbortSignal): Promise<CourseTree> => {
+    const result = await loadCourse(id, signal);
+    if (!result.ok) throw new AuthoringQueryError(result.error);
+    return result.value;
+  };
   return {
     ...teach,
     documents,
+    /** The owner-scoped read itself, for callers that key and recover it their own way. */
+    readDetail,
     detail: (id: CourseId) =>
       queryOptions({
         queryKey: ['teach', 'courses', 'tree', id],
-        queryFn: async ({ signal }) => {
-          const result = await loadCourse(id, signal);
-          if (!result.ok) throw new AuthoringQueryError(result.error);
-          return result.value;
-        },
+        queryFn: ({ signal }) => readDetail(id, signal),
       }),
   };
 }

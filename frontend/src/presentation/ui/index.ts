@@ -17,6 +17,7 @@ export type { MenuOption, TabItem } from './overlays';
 export { Table, DataTable, ProgressBar, LoadMeter, Delta, Pagination } from './data';
 export type { TableColumn, TableRow, MeterTone, DataColumn, DataTableSort } from './data';
 export { PageHeader, SummaryStrip } from './layout';
+export { StatusPage } from './StatusPage';
 export type { SummaryItem } from './layout';
 export { EmptyState, ErrorState, Skeleton } from './states';
 export { StatTile } from './StatTile';

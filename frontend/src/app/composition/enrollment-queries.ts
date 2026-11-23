@@ -32,9 +32,15 @@ export const enrollmentRefundQueueQueryKey = ['enrollment', 'refundQueue'] as co
 
 export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
   return {
-    membership: (courseId: string) =>
+    // Keyed by viewer as well, so a sign-in, sign-out or another account never sees a previous
+    // viewer's membership; invalidating `enrollmentMembershipQueryKey(courseId)` still matches
+    // every viewer's entry by prefix.
+    /** The membership read itself, for callers that key and recover it their own way. */
+    readMembership: (courseId: string, signal: AbortSignal) =>
+      enrollment.membership(courseId, signal).then(unwrap),
+    membership: (courseId: string, userId: string) =>
       queryOptions({
-        queryKey: enrollmentMembershipQueryKey(courseId),
+        queryKey: [...enrollmentMembershipQueryKey(courseId), userId] as const,
         queryFn: ({ signal }) => enrollment.membership(courseId, signal).then(unwrap),
       }),
     myMemberships: () =>

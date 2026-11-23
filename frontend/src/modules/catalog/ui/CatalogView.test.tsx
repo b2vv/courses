@@ -127,7 +127,7 @@ describe('catalog presentation', () => {
   });
 
   it('shows a complete detail description and a course learning entry', () => {
-    render(<CourseView course={architectureCourse} />);
+    render(<CourseView course={architectureCourse} action={{ kind: 'enroll' }} />);
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Архітектура застосунків Go' }),
@@ -138,6 +138,9 @@ describe('catalog presentation', () => {
     expect(screen.getByRole('heading', { name: 'Готові почати?' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Записатися' })).toBeTruthy();
     expect(screen.getByRole('link', { name: '← Усі курси' }).getAttribute('href')).toBe('/courses');
+    // No constant label above the title (C3 #7); the price is in the action box (C3 #4).
+    expect(screen.queryByText('Практичний курс')).toBeNull();
+    expect(within(screen.getByRole('complementary')).getByText('Безкоштовно')).toBeTruthy();
 
     const programHeading = screen.getByRole('heading', { name: 'Програма курсу' });
     const program = programHeading.closest('section');
@@ -147,12 +150,20 @@ describe('catalog presentation', () => {
     expect(within(program).queryByRole('link')).toBeNull();
   });
 
-  it('renders enrollment CTA states and switches after a successful enrollment', async () => {
+  it('puts the action box before the course text in reading order (C3 #5)', () => {
+    render(<CourseView course={architectureCourse} action={{ kind: 'enroll' }} />);
+    const box = screen.getByRole('complementary');
+    const about = screen.getByRole('heading', { name: 'Про курс' });
+    expect(box.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders the enrol state and the member states', async () => {
     const user = userEvent.setup();
     let enrolled = false;
     const { rerender } = render(
       <CourseView
         course={architectureCourse}
+        action={{ kind: 'enroll' }}
         onEnroll={() => {
           enrolled = true;
         }}
@@ -161,13 +172,28 @@ describe('catalog presentation', () => {
     await user.click(screen.getByRole('button', { name: 'Записатися' }));
     expect(enrolled).toBe(true);
 
-    rerender(<CourseView course={architectureCourse} membership={{ state: 'active' }} />);
+    rerender(
+      <CourseView
+        course={architectureCourse}
+        action={{ kind: 'member', blocked: false, comingSoon: false }}
+      />,
+    );
     expect(screen.getByRole('heading', { name: 'Ви учасник' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
-      '/learn/go-architecture',
+    // Still a link (it navigates), drawn as the main button; the complaint is a quiet text
+    // button below it (C3 #3).
+    const start = screen.getByRole('link', { name: 'Почати навчання' });
+    expect(start.getAttribute('href')).toBe('/learn/go-architecture');
+    expect(start.className).toContain('ui-button--primary');
+    expect(screen.getByRole('button', { name: 'Поскаржитися на викладача' }).className).toContain(
+      'ui-button--quiet',
     );
 
-    rerender(<CourseView course={architectureCourse} membership={{ state: 'blocked' }} />);
+    rerender(
+      <CourseView
+        course={architectureCourse}
+        action={{ kind: 'member', blocked: true, comingSoon: false }}
+      />,
+    );
     expect(screen.getByRole('status').textContent).toContain(
       'Доступ до контенту відкрито, участь в обговореннях обмежено',
     );
@@ -175,7 +201,7 @@ describe('catalog presentation', () => {
     rerender(
       <CourseView
         course={architectureCourse}
-        membership={{ state: 'revoked' }}
+        action={{ kind: 'enroll' }}
         enrollError="membership_conflict"
       />,
     );
@@ -183,14 +209,14 @@ describe('catalog presentation', () => {
     expect(screen.getByRole('alert').textContent).toContain('Стан участі змінився');
   });
 
-  it('lets current members report the instructor and keeps the action from revoked viewers', async () => {
+  it('lets current members report the instructor', async () => {
     const report = async (reason: string) => {
       expect(reason).toBe('Неприйнятна поведінка');
     };
     const { rerender } = render(
       <CourseView
         course={architectureCourse}
-        membership={{ state: 'active' }}
+        action={{ kind: 'member', blocked: false, comingSoon: false }}
         onReportLecturer={report}
       />,
     );
@@ -202,8 +228,112 @@ describe('catalog presentation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Надіслати скаргу' }));
     expect((await screen.findByRole('status')).textContent).toContain('Скаргу надіслано');
 
-    rerender(<CourseView course={architectureCourse} membership={{ state: 'revoked' }} />);
+    rerender(<CourseView course={architectureCourse} action={{ kind: 'enroll' }} />);
     expect(screen.queryByRole('button', { name: 'Поскаржитися на викладача' })).toBeNull();
+  });
+
+  it('sends a guest to sign in and back to this course, never to a write (C3 #1)', () => {
+    const { rerender } = render(
+      <CourseView course={architectureCourse} action={{ kind: 'sign-in', paid: false }} />,
+    );
+    const signIn = screen.getByRole('link', { name: 'Увійти, щоб записатися' });
+    expect(signIn.getAttribute('href')).toBe('/login?returnTo=%2Fcourses%2Fgo-architecture');
+    expect(screen.queryByRole('button', { name: 'Записатися' })).toBeNull();
+
+    rerender(
+      <CourseView
+        course={{ ...architectureCourse, price: { minor: 189000, currency: 'UAH' } }}
+        action={{ kind: 'sign-in', paid: true }}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Увійти, щоб купити' })).toBeTruthy();
+    expect(within(screen.getByRole('complementary')).getByText(/1\s?890\s?₴/u)).toBeTruthy();
+  });
+
+  it('offers to buy a paid course and names a refusal (C3 #4)', async () => {
+    let bought = 0;
+    const paid = {
+      ...architectureCourse,
+      price: { minor: 189000, currency: 'UAH' as const },
+    };
+    const { rerender } = render(
+      <CourseView course={paid} action={{ kind: 'buy' }} onBuy={() => (bought += 1)} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Купити курс' }));
+    expect(bought).toBe(1);
+
+    rerender(<CourseView course={paid} action={{ kind: 'buy' }} buyError="course_already_owned" />);
+    expect(screen.getByRole('alert').textContent).toBe('Цей курс зараз не можна купити.');
+
+    // A lost session is handled by re-reading it, not by a message that asks to retry.
+    rerender(
+      <CourseView course={paid} action={{ kind: 'buy' }} buyError="authentication_required" />,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows only «Скоро буде» for a course without lessons (C3 #2)', () => {
+    const empty = { ...architectureCourse, program: [], lessonCount: 0 };
+    const { rerender } = render(<CourseView course={empty} action={{ kind: 'coming-soon' }} />);
+    const box = screen.getByRole('complementary');
+    expect(within(box).getByRole('heading', { name: 'Скоро буде' })).toBeTruthy();
+    expect(within(box).queryByRole('button')).toBeNull();
+    expect(within(box).queryByRole('link')).toBeNull();
+    // The header line matches the catalog card.
+    expect(screen.getAllByText('Скоро буде')).toHaveLength(2);
+    expect(screen.queryByText('Новий курс')).toBeNull();
+
+    rerender(
+      <CourseView course={empty} action={{ kind: 'member', blocked: false, comingSoon: true }} />,
+    );
+    expect(screen.getByRole('heading', { name: 'Ви учасник' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Почати навчання' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Поскаржитися на викладача' })).toBeTruthy();
+  });
+
+  it('shows the author their course with a way to edit it (owner decision)', () => {
+    render(
+      <CourseView course={architectureCourse} action={{ kind: 'owner', comingSoon: false }} />,
+    );
+    expect(screen.getByRole('heading', { name: 'Це ваш курс' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Редагувати курс' }).getAttribute('href')).toBe(
+      `/teach/courses/${architectureCourse.id}`,
+    );
+    expect(screen.queryByRole('button', { name: 'Записатися' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Поскаржитися на викладача' })).toBeNull();
+  });
+
+  it('keeps the administrator exemption (G8)', () => {
+    render(
+      <CourseView course={architectureCourse} action={{ kind: 'admin', comingSoon: false }} />,
+    );
+    expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
+      '/learn/go-architecture',
+    );
+    expect(screen.queryByRole('button', { name: 'Записатися' })).toBeNull();
+  });
+
+  it('holds every action while access is checked, and offers a retry when it fails', async () => {
+    let retried = 0;
+    const { rerender } = render(
+      <CourseView course={architectureCourse} action={{ kind: 'checking' }} />,
+    );
+    const box = screen.getByRole('complementary');
+    expect(within(box).getByRole('status').textContent).toBe('Перевіряємо доступ…');
+    expect(within(box).queryByRole('button')).toBeNull();
+
+    rerender(
+      <CourseView
+        course={architectureCourse}
+        action={{ kind: 'unavailable' }}
+        onRetryAccess={() => (retried += 1)}
+      />,
+    );
+    expect(screen.getByRole('alert').textContent).toContain('Не вдалося перевірити доступ');
+    await userEvent.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
+    expect(retried).toBe(1);
+    // The course itself stays readable.
+    expect(screen.getByRole('heading', { name: 'Про курс' })).toBeTruthy();
   });
 
   it('omits an empty program section and localizes a present program heading', () => {
@@ -339,10 +469,11 @@ describe('catalog presentation', () => {
     );
 
     expect(screen.getByRole('status').textContent).toBe('Завантажуємо курси');
-    expect(screen.getByRole('heading', { name: 'Курс не знайдено' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Перейти до каталогу' }).getAttribute('href')).toBe(
-      '/courses',
-    );
+    // The same page as the site 404: a level-one heading and a button back (C3 #8).
+    expect(screen.getByRole('heading', { level: 1, name: 'Курс не знайдено' })).toBeTruthy();
+    const back = screen.getByRole('link', { name: 'Перейти до каталогу' });
+    expect(back.getAttribute('href')).toBe('/courses');
+    expect(back.className).toContain('ui-button--primary');
   });
 
   it('brings the search controls back in line when the address changes under them', async () => {

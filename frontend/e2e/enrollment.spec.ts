@@ -306,6 +306,54 @@ test('En01 free enrollment shows CTA, creates membership, and appears in My lear
   }
 });
 
+test('C3 a guest signs in from a course and returns to it; its author sees their own course', async ({
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const admin = await openAs(browser, baseURL, 'admin');
+  const guest = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  const student = await openAs(browser, baseURL, 'student');
+  const instructor = await openAs(browser, baseURL, 'instructor');
+  try {
+    const course = await createFreeCourse(admin.request, baseURL, 'c3');
+    // A guest gets the price and one sign-in action, never a write (C3 #1); on a phone the
+    // action is on the first screen (C3 #5: this fixture, uk, 100% text, 390×844).
+    const page = await guest.newPage();
+    await page.goto(`/courses/${course.slug}`);
+    const box = page.getByRole('complementary');
+    await expect(box.getByText('Безкоштовно')).toBeVisible();
+    await expect(box.getByRole('button', { name: 'Записатися' })).toHaveCount(0);
+    const signIn = box.getByRole('link', { name: 'Увійти, щоб записатися' });
+    const target = `/login?returnTo=${encodeURIComponent(`/courses/${course.slug}`)}`;
+    await expect(signIn).toHaveAttribute('href', target);
+    const bounds = await signIn.boundingBox();
+    expect((bounds?.y ?? Infinity) + (bounds?.height ?? 0)).toBeLessThanOrEqual(844);
+    expect(await wcagViolations(page)).toEqual([]);
+    // The return target survives the sign-in page: a signed-in visitor of that address
+    // continues to the same course (the e2e login budget is spent, so no new form login).
+    const back = await student.newPage();
+    await back.goto(target);
+    await back.getByRole('button', { name: 'Продовжити' }).click();
+    await expect(back).toHaveURL(new RegExp(`/courses/${course.slug}$`));
+    await expect(back.getByRole('button', { name: 'Записатися' })).toBeVisible();
+    // The fixture's instructor is its author: their course, with a way to edit it (owner).
+    const own = await instructor.newPage();
+    await own.goto(`/courses/${course.slug}`);
+    await expect(own.getByRole('heading', { name: 'Це ваш курс' })).toBeVisible();
+    await expect(own.getByRole('link', { name: 'Редагувати курс' })).toHaveAttribute(
+      'href',
+      `/teach/courses/${course.id}`,
+    );
+    await expect(own.getByRole('button', { name: 'Записатися' })).toHaveCount(0);
+  } finally {
+    await instructor.close();
+    await student.close();
+    await guest.close();
+    await admin.close();
+  }
+});
+
 test('Lo19 an administrator sees a free course but never the enrol call to action', async ({
   browser,
   baseURL,

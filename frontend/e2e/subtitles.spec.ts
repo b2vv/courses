@@ -1063,7 +1063,7 @@ test.describe('MS4 captions follow decoded audio', () => {
       .poll(async () => (await peak(page)).time, { timeout: 15_000 })
       .toBeGreaterThan(before);
     await page.unrouteAll({ behavior: 'wait' });
-    await panel(page).getByRole('button', { name: 'Спробувати ще', exact: true }).click();
+    await panel(page).getByRole('button', { name: 'Спробувати ще раз', exact: true }).click();
     await showing(page, 'de');
     expect(isTone(await peak(page), 880)).toBe(true);
   });

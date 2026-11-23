@@ -16,6 +16,8 @@ export { createApiCourseRepository } from './adapters/course-repository';
 // UI.
 export { CatalogView } from './ui/CatalogView';
 export { CourseView, Reviews, enrollErrorKey } from './ui/CourseView';
+export { courseAction, lessonTotal } from './ui/course-action';
+export type { CourseAction, CourseViewer, Fact } from './ui/course-action';
 export { HomeView } from './ui/HomeView';
 export { RatingSummary } from './ui/RatingSummary';
 export { ValueStrip } from './ui/ValueStrip';

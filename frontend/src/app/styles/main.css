@@ -1796,9 +1796,14 @@ a.ui-button {
     hyphens: auto;
   }
 }
-.detail-heading .eyebrow {
-  color: var(--color-accent);
+.detail-heading h1 {
   margin-top: 2rem;
+}
+/* The rating line, or «Скоро буде» for a course without lessons, the same as the catalog card
+   (C3 #7): metadata, not a heading. */
+.detail-meta {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--color-hero-muted);
 }
 .detail-heading .lede {
   color: var(--color-hero-muted);
@@ -1813,12 +1818,26 @@ a.ui-button {
   padding-top: 2rem;
   border-top: 1px solid var(--color-border);
 }
+/* The action box is first in the DOM (it follows the header on a phone, C3 #5); on a wide
+   screen it is placed in the right column beside the content. */
+.detail-body > .availability {
+  grid-column: 2;
+  grid-row: 1;
+}
+.detail-main {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  align-content: start;
+  /* Sections are told apart by space, not only by their headings (C3 #6). */
+  gap: 3rem;
+}
+.detail-main > section > h2 {
+  margin-top: 0;
+}
 .description {
   white-space: pre-line;
   font-size: 1.1rem;
-}
-.program {
-  margin-top: 2.5rem;
 }
 .course-program {
   display: grid;
@@ -1838,14 +1857,47 @@ a.ui-button {
   padding-left: 1.5rem;
 }
 .availability {
-  padding: 1.5rem;
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  /* px, not rem, as in the header block: the inset is layout, and in rem it doubled at 200% text
+     and left the box too narrow for «Безкоштовно» and the action label (C3 #9). */
+  padding: clamp(16px, 4vw, 24px);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   align-self: start;
+  container-type: inline-size;
+}
+.availability h2,
+.availability p {
+  margin: 0;
 }
 .availability h2 {
   font-size: 1.15rem;
+}
+.course-box-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.course-box-alert {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+/* The complaint sits apart from the main action, under a rule (C3 #3). */
+.course-box-secondary {
+  justify-self: stretch;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+/* Enlarged text only (the box is under ~14em wide at 200% on a phone): a word that does not fit
+   breaks at a syllable with a hyphen rather than at an arbitrary letter (C3 #9, the TYPE rule). */
+@container (max-width: 14em) {
+  .availability :is(p, h2, .ui-button) {
+    overflow-wrap: normal;
+    hyphens: auto;
+  }
 }
 .my-learning-list {
   display: grid;
@@ -1873,6 +1925,11 @@ a.ui-button {
   .detail-body {
     grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
+  }
+  .detail-body > .availability,
+  .detail-main {
+    grid-column: 1;
+    grid-row: auto;
   }
   /* No inner inset on narrow screens: the page already has one, and the second inset left the
      search field 260px wide at 200% text (C2 #3). */

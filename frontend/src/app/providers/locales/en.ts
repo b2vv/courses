@@ -122,6 +122,14 @@ export const en = {
       learningTitle: 'Ready to begin?',
       learningHint: 'We will open the first unfinished lesson in the course program.',
       startLearning: 'Start learning',
+      checking: 'Checking your access…',
+      accessFailed: 'We could not check your access to this course.',
+      comingSoonHint:
+        'Lessons are being prepared. The course opens as soon as the first lesson is ready.',
+      signInToEnroll: 'Sign in to enroll',
+      signInToBuy: 'Sign in to buy',
+      ownerTitle: 'This is your course',
+      edit: 'Edit course',
     },
     enrollment: {
       enroll: 'Enroll',
