@@ -71,7 +71,8 @@ Keyboard: real key presses in Chromium (Playwright `keyboard.press`), see C3b-6.
   - The failure was the P03 row in `playback.spec.ts:1679`. It holds «Почати навчання» to one learning-course read, and the unconditional fresh read on the redirected lesson made it two.
   - Fixed in `f45bf7ea` with a read timestamp in history state; the delta review found that a Back could still reuse it (P2), so it was replaced by a one-use token (see «The lesson player resumed from a cached position» above). Route tests: one read on the redirect; Back to the redirect entry reads again with nothing invalidated and after another lesson's read; removing the token or not taking it fails 2 tests each.
   - Targeted rerun on image `d63ea8a7be61`, `-g "P02 P03|C3b"` with its dependency projects, after `make seed-identities`: 148 passed, B19 7/7.
-- **Ordered `make check`, attempt 2:** pending.
+- **Ordered `make check`, attempt 2** on `bf4726af`, 14:35–15:23 UTC: **GATE_EXIT=0**. Frontend unit 1589/1589, Go `ok` lines 130 (unit + integration), smoke PASS, e2e 177 passed in 27.4 min, B19 login count 7 (maximum consecutive 3). Kiri `DOCKER_HOST` with `COMPOSE_FILE` = base + Kiri override; identities reseeded before the run.
+- **Process note:** one full unit run on `bf4726af` showed 9 timeouts (20 s / 5 s, admin editor tests) while a Codex review ran its own tests in parallel, with load average ~29. That commit had been made in parallel with the run, before its result was read. The next run, without the parallel load, gave 1589/1589, and so did the gate.
 
 ## Independent review
 
@@ -87,6 +88,11 @@ Keyboard: real key presses in Chromium (Playwright `keyboard.press`), see C3b-6.
 | Fix `8fe63e72` | Codex | BLOCK — P2 the 2 s reuse window resumes a fast A→B→A from an old position | `-r3.md` |
 | Fix `294ec245` | Codex | BLOCK — P2 the redirect mark is reused on Back within its window | `-r4.md` |
 | Fix `165197ae` | Codex | **PASS** | `-r5.md` |
+| Final-review coverage `c5bdd4bb` (8 questions + 2 ADR checks) | Codex | BLOCK — F1 false R6 rationale, F2 new tab unproven; F3/F4 nonblocking. Existing ADRs PASS; no new ADR required | `_wip-review-c3b-coverage.md` |
+| Delta `c5bdd4bb..2b179732` | Codex | BLOCK — P2 history mark survives Back; P3 stale wording | `_wip-review-c3b-delta.md` |
+| Delta `..c581e96e` | Codex | BLOCK — P2 an interrupted chain leaves its token | `-delta-r2.md` |
+| Delta `..c772dd44` | Codex | BLOCK — P2 a doubly interrupted chain (no `onResolved`) | `-delta-r3.md` |
+| Delta `..bf4726af` | Codex | **PASS**, with the coverage questions and ADR checks re-answered for the delta | `-delta-r4.md` |
 
 ## Not done here
 
