@@ -20,7 +20,7 @@
 | Catalog | limit 1–50 (default 20), offset 0–10000 (default 0), q максимум 100 Unicode code points, sort `recent` або `title` (default `recent`) | Обмеження вартості запиту та відтворювана адреса; q trims surrounding whitespace |
 | Catalog ordering | `recent`: published_at DESC, id ASC; `title`: title ASC, id ASC; явна PostgreSQL collation у запиті | Стабільність на ties; offset pagination може зміщуватися між окремими запитами під час публікації |
 | Catalog consistency | List і count в одній read-only repeatable-read transaction | Узгоджений snapshot в межах відповіді; не обіцяє snapshot між сторінками |
-| Demo content | Окрема явна idempotent seed-команда; міграція без fixtures | Схема не публікує демонстраційні курси автоматично |
+| Demo content | Окрема явна idempotent seed-команда; міграція без fixtures | Схема не публікує демонстраційні курси автоматично. Рядки seed стабільні, але з design-pass C2b кожен запуск оновлює `published_at`/`updated_at` демо-курсів (1–3 дні тому), бо курс без уроків зникає з каталогу через 30 днів (`docs/design-pass/plan.md` §15) |
 | Media foundation | Nginx `/media/*` fail-closed; worker Asynq запускається без handlers і має статус/health | Немає доступу до storage або удаваного processing до Phase 5–6 |
 | Storage | Named media volume, Nginx read-only, worker writable; file layout задокументовано | Реальний storage adapter і atomic publishing з'являться з upload use case |
 | HLS майбутній формат | H.264/AAC, MPEG-TS `.ts` segments; 360p/720p, 1080p лише за достатнього source | Найпростіший початковий pipeline; немає заяви DRM |

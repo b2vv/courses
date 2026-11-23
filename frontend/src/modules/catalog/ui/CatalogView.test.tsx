@@ -310,6 +310,26 @@ describe('catalog presentation', () => {
     expect(screen.queryByRole('link', { name: '← Попередня' })).toBeNull();
   });
 
+  it('computes the last page with courses, not the first, for several pages', () => {
+    // 10 per page: 25 courses fill pages at 0, 10 and 20, so the last is 20; exactly 20
+    // courses fill pages at 0 and 10, so the last is 10.
+    for (const [total, offset] of [
+      [25, '20'],
+      [20, '10'],
+    ] as const) {
+      const query: CatalogQuery = { q: '', sort: 'recent', limit: 10, offset: 40 };
+      const { unmount } = render(
+        <CatalogView
+          query={query}
+          page={{ items: [], pagination: { limit: 10, offset: 40, total } }}
+        />,
+      );
+      const href = screen.getByRole('link', { name: 'До останньої сторінки' }).getAttribute('href');
+      expect(new URL(href ?? '', 'https://courses.test').searchParams.get('offset')).toBe(offset);
+      unmount();
+    }
+  });
+
   it('announces loading and makes a missing course recoverable', () => {
     render(
       <>
