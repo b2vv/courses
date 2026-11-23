@@ -4629,7 +4629,7 @@ export const getListPublishedCoursesUrl = (params?: ListPublishedCoursesParams,)
 }
 
 /**
- * Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
+ * Only published courses are listed, and a published course with no lessons is listed only for 30 days after its publishedAt; after that it leaves the list and the total but its own page (GET /api/v1/courses/{slug}) still answers. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every listed course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
  * @summary List published courses
  */
 export const listPublishedCourses = async (params?: ListPublishedCoursesParams, options?: RequestInit): Promise<listPublishedCoursesResponse> => {

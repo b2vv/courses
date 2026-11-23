@@ -56,6 +56,16 @@ test('catalog and detail include PostgreSQL course data in initial HTML', async 
     'Go: фундамент надійного бекенду',
   );
   await expect(page.getByRole('heading', { name: 'Про курс' })).toBeVisible();
+
+  // Without JavaScript the search form still works as a native GET form: the typed text and
+  // the chosen order go into the address and the server renders the result.
+  await page.goto('/courses');
+  await page.getByLabel('Знайти курс').fill('React');
+  await page.getByLabel('Сортування').selectOption('title');
+  await page.getByRole('button', { name: 'Знайти', exact: true }).click();
+  await expect(page).toHaveURL(/[?&]q=React&sort=title/);
+  await expect(page.getByRole('heading', { name: 'React: доступні інтерфейси' })).toBeVisible();
+  await expect(page.locator('.course-list').getByRole('listitem')).toHaveCount(1);
   await context.close();
 });
 
