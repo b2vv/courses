@@ -17,32 +17,30 @@ export function learningCourseQueryKey(slug: string) {
   return ['learn', 'course', slug] as const;
 }
 /**
- * One-use tokens for the «continue» redirect of `/learn/<slug>` (C3b). The redirect issues one
- * and puts it in history state; the lesson it leads to takes it, and only that first take lets
- * the lesson reuse the course read the redirect just made. History keeps the token, but a Back
- * or Forward to that entry finds it already taken, so it reads again (Codex delta review). Held
- * per router (request scoped), in memory only. Every finished navigation clears them (`clear`,
- * wired in the root layout): a token lives only within its own redirect chain, so one left
- * untaken by an interrupted chain cannot be used by a later Back (delta review round 2).
+ * One-use tokens for the «continue» redirect of `/learn/<slug>` (C3b). The redirect issues one for
+ * its target lesson and puts it in history state; that lesson takes it, and only that first take
+ * lets the lesson reuse the course read the redirect just made. Held per router (request scoped),
+ * in memory only.
+ *
+ * A token lives only while navigation heads to its target. Every navigation that starts towards
+ * another address retires it (`retainFor`, wired to the router's `onBeforeNavigate` in the root
+ * layout), including one that is later cancelled. A Back or Forward to the redirect's entry
+ * therefore finds no token, whether the chain finished or was interrupted (Codex delta reviews).
  */
 export function createContinueReads() {
-  const issued = new Set<string>();
+  const issued = new Map<string, string>();
   return {
-    issue(): string {
+    issue(targetPathname: string): string {
       const token = crypto.randomUUID();
-      issued.add(token);
-      // A redirect whose lesson never loads leaves its token behind; keep the set small.
-      if (issued.size > 8) {
-        const oldest = issued.values().next().value;
-        if (oldest !== undefined) issued.delete(oldest);
-      }
+      issued.set(token, targetPathname);
       return token;
     },
-    take(token: string | undefined): boolean {
-      return token !== undefined && issued.delete(token);
+    take(token: string | undefined, pathname: string): boolean {
+      if (token === undefined || issued.get(token) !== pathname) return false;
+      return issued.delete(token);
     },
-    clear(): void {
-      issued.clear();
+    retainFor(pathname: string): void {
+      for (const [token, target] of issued) if (target !== pathname) issued.delete(token);
     },
   };
 }

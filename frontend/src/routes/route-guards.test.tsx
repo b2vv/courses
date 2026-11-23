@@ -3334,15 +3334,16 @@ test('C3b review: a continue token left untaken by an interrupted redirect does 
   await router.load();
   renderRouter(router);
   await screen.findByRole('heading', { level: 1, name: 'Course catalog' });
-  // A redirect read the course and issued its token, but its lesson never loaded (the user left
-  // while the identity guard was waiting). Then another navigation finished.
+  // A redirect read the course and issued its token, but its lesson never loaded: the user
+  // started another navigation, which is itself interrupted (not awaited, never resolved), and
+  // then went Back to the redirect's entry (Codex delta review round 3).
   await client.fetchQuery(router.options.context.learn.course('interrupted'));
   expect(reads).toBe(1);
-  const token = router.options.context.learn.continueReads.issue();
-  await act(async () => {
-    await router.navigate({ to: '/courses', search: { q: 'x' } });
+  const token = router.options.context.learn.continueReads.issue(`/learn/interrupted/${lessonA}`);
+  act(() => {
+    void router.navigate({ to: '/courses', search: { q: 'x' } });
   });
-  // Back to the entry that carries the token: it was retired, so the lesson reads.
+  // Back to the entry that carries the token: it was retired when that navigation started.
   await act(async () => {
     await router.navigate({
       to: '/learn/$',

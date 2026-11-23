@@ -115,23 +115,23 @@ test.each([
   },
 );
 
-test('C3b a continue-redirect token is taken once', () => {
+test('C3b a continue-redirect token is taken once, and only by its target', () => {
   const tokens = createContinueReads();
-  const token = tokens.issue();
-  expect(tokens.take(undefined)).toBe(false);
-  expect(tokens.take('not-issued')).toBe(false);
-  expect(tokens.take(token)).toBe(true);
+  const token = tokens.issue('/learn/go/lesson-1');
+  expect(tokens.take(undefined, '/learn/go/lesson-1')).toBe(false);
+  expect(tokens.take('not-issued', '/learn/go/lesson-1')).toBe(false);
+  expect(tokens.take(token, '/learn/go/lesson-2')).toBe(false);
+  expect(tokens.take(token, '/learn/go/lesson-1')).toBe(true);
   // A Back to the same history entry brings the same token again: it no longer counts.
-  expect(tokens.take(token)).toBe(false);
-  // Tokens whose lesson never loaded do not pile up.
-  const first = tokens.issue();
-  for (let index = 0; index < 8; index += 1) tokens.issue();
-  expect(tokens.take(first)).toBe(false);
+  expect(tokens.take(token, '/learn/go/lesson-1')).toBe(false);
 });
 
-test('C3b clear retires every untaken continue token', () => {
+test('C3b a navigation towards another address retires the token; one to its target keeps it', () => {
   const tokens = createContinueReads();
-  const token = tokens.issue();
-  tokens.clear();
-  expect(tokens.take(token)).toBe(false);
+  const token = tokens.issue('/learn/go/lesson-1');
+  tokens.retainFor('/learn/go/lesson-1');
+  expect(tokens.take(token, '/learn/go/lesson-1')).toBe(true);
+  const left = tokens.issue('/learn/go/lesson-1');
+  tokens.retainFor('/courses');
+  expect(tokens.take(left, '/learn/go/lesson-1')).toBe(false);
 });

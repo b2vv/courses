@@ -223,10 +223,13 @@ function Layout() {
   const router = useRouter();
   const [isMenuOpen, setMenuOpen] = useState(false);
   useEffect(() => router.subscribe('onBeforeNavigate', () => setMenuOpen(false)), [router]);
-  // A «continue» redirect token lives only within its own redirect chain (C3b): every finished
-  // navigation retires the ones not taken.
+  // A «continue» redirect token lives only while navigation heads to its lesson (C3b): any
+  // navigation that starts towards another address retires it, even if it is later cancelled.
   useEffect(
-    () => router.subscribe('onResolved', () => learn.continueReads.clear()),
+    () =>
+      router.subscribe('onBeforeNavigate', ({ toLocation }) =>
+        learn.continueReads.retainFor(toLocation.pathname),
+      ),
     [router, learn],
   );
   useFocusAfterNavigation();

@@ -60,7 +60,9 @@ export const Route = createFileRoute('/learn/$')({
         // at one course read (P03, `e2e/playback.spec.ts`).
         state: (previous) => ({
           ...previous,
-          learningContinueRead: context.learn.continueReads.issue(),
+          learningContinueRead: context.learn.continueReads.issue(
+            `/learn/${course.slug}/${course.continueLessonId}`,
+          ),
         }),
       });
     }
@@ -74,7 +76,7 @@ export const Route = createFileRoute('/learn/$')({
     // so a Back or Forward to this history entry later reads again. An age window, a bare mark and
     // a read timestamp all let a later return reuse an old read (Codex review rounds 3, 4, delta).
     const reuse =
-      context.learn.continueReads.take(location.state.learningContinueRead) &&
+      context.learn.continueReads.take(location.state.learningContinueRead, location.pathname) &&
       context.queryClient.getQueryState(learningCourseQueryKey(lessonRoute.slug))?.isInvalidated ===
         false;
     const course = await ensureRouteQuery(
