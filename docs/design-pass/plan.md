@@ -778,6 +778,8 @@ Defense (ред. 5): 0 пробілів.
 
 **Планова критика / defense.** Ред. 1 — чотири окремі лінзи (окремі процеси Codex, `_wip-review-acct-lens-<lens>.md`) + defense (`_wip-review-acct-defense.md`): 5 запущено / 5 повернулись; ai-slop 1 блокер (+2 неблокуючі), complexity 0 (+4 неблокуючі, прийнято: результат тестується один раз, помилка — від мутації групи, CSS розширює наявні правила, типовий текст лише в текстових полях), logical-gaps 6 (+2), edge-cases 8 (+2), defense 4 пробіли (1, 2, 3, 5) → ред. 2.
 
+Ред. 7 — усі чотири лінзи й defense (`*-r7.md`): 5 запущено / 5 повернулись; ai-slop 2 (+1 неблокуюча), complexity 2 (+1 неблокуюча), logical-gaps 6, edge-cases 6; defense — 2 пробіли (2, 3). Сім ред. не зійшлись: кожна латка узгодженості сесії (`/me` у польоті, втрачені відповіді, кілька вкладок, чужий токен) відкриває наступні випадки того самого класу. Зупинено до рішення власника про межі зрізу (2026-11-27).
+
 Ред. 6 — усі чотири лінзи й defense (`*-r6.md`): 5 запущено / 5 повернулись; ai-slop 1 (+1 неблокуюча: один ланцюжок ACCT-6 — прийнято), complexity 1 (+1 неблокуюча: один предикат невизначеного збою — прийнято), logical-gaps 3, edge-cases 3; defense — 2 пробіли (2, 3) → ред. 7.
 
 Ред. 5 — усі чотири лінзи й defense (`*-r5.md`): 5 запущено / 5 повернулись; ai-slop 0 (+2 неблокуючі: 403 без повтору, нейтральний текст конфлікту — прийнято), complexity 1, logical-gaps 4, edge-cases 5; defense — 2 пробіли (2, 3) → ред. 6.
@@ -788,6 +790,6 @@ Defense (ред. 5): 0 пробілів.
 
 Ред. 2 — усі чотири лінзи й defense повторно (`*-r2.md`): 5 запущено / 5 повернулись; ai-slop 2, complexity 1 (+2 неблокуючі: «скопійовано» в дочірньому блоці, CSS розширює наявні селектори — прийнято), logical-gaps 4 (+2: утримання `/me` до звільнення, ланцюжок E5 → E4 → налаштування — прийнято), edge-cases 7; defense — 2 пробіли (рядки 2, 3) → ред. 3.
 
-**Рев'ю-блок.** task `design-pass ACCT` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED (15 блокерів у 3 лінзах, defense 4 пробіли); ред. 2: `verdict_received` BLOCKED (14 блокерів у 4 лінзах, defense 2 пробіли); ред. 3: `verdict_received` BLOCKED (12 блокерів у 4 лінзах, defense 2 пробіли); ред. 4: `verdict_received` BLOCKED (10 блокерів у 4 лінзах, defense 2 пробіли); ред. 5: `verdict_received` BLOCKED (10 блокерів у 3 лінзах, ai-slop 0; defense 2 пробіли); ред. 6: `verdict_received` BLOCKED (8 блокерів у 4 лінзах, defense 2 пробіли); ред. 7: `prepared`.
+**Рев'ю-блок.** task `design-pass ACCT` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED (15 блокерів у 3 лінзах, defense 4 пробіли); ред. 2: `verdict_received` BLOCKED (14 блокерів у 4 лінзах, defense 2 пробіли); ред. 3: `verdict_received` BLOCKED (12 блокерів у 4 лінзах, defense 2 пробіли); ред. 4: `verdict_received` BLOCKED (10 блокерів у 4 лінзах, defense 2 пробіли); ред. 5: `verdict_received` BLOCKED (10 блокерів у 3 лінзах, ai-slop 0; defense 2 пробіли); ред. 6: `verdict_received` BLOCKED (8 блокерів у 4 лінзах, defense 2 пробіли); ред. 7: `verdict_received` BLOCKED (16 блокерів у 4 лінзах, defense 2 пробіли). **WAITING** — рішення власника про межі зрізу (питання 2026-11-27).
 
 **Допуск: NOT READY** — до вердикту планової критики.
