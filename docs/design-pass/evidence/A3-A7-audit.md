@@ -200,4 +200,9 @@ Tab order matches the visual order on every captured state; focus is a visible 3
 
 ## Owner answers
 
-(to be recorded)
+2026-11-26, owner: «Правити все» — all 16, including suspects #15 and #16 and the taste line, are to be fixed.
+
+| # | Answer | Date |
+|---|---|---|
+| 1–14 | fix | 2026-11-26 |
+| 15, 16 (suspect) | fix | 2026-11-26 |
