@@ -818,6 +818,8 @@ Defense (ред. 5): 0 пробілів.
 
 Ред. 2 — усі чотири лінзи й defense повторно (`*-r2.md`): 5 запущено / 5 повернулись; ai-slop 2, complexity 1 (+2 неблокуючі: «скопійовано» в дочірньому блоці, CSS розширює наявні селектори — прийнято), logical-gaps 4 (+2: утримання `/me` до звільнення, ланцюжок E5 → E4 → налаштування — прийнято), edge-cases 7; defense — 2 пробіли (рядки 2, 3) → ред. 3.
 
+Ред. 12 — logical-gaps (`*-r12.md`): 1 запущено / 1 повернулась; 0 блокерів.
+
 Ред. 11 — logical-gaps, edge-cases і defense (`*-r11.md`): 3 запущено / 3 повернулись; logical-gaps 1 (+1 неблокуюча), edge-cases 0 (+1 неблокуюча — той самий пункт A6, прийнято); defense — **захищено, 0 пробілів** → ред. 12.
 
 Ред. 10 — logical-gaps, edge-cases і defense (`*-r10.md`): 3 запущено / 3 повернулись; logical-gaps 3, edge-cases 3 (ті самі три: вхід без токена, A6 після 204 офлайн, фікстура ACCT-3); defense — 1 пробіл (рядок 2) → ред. 11.
@@ -826,6 +828,23 @@ Defense (ред. 5): 0 пробілів.
 
 Ред. 8 — усі чотири лінзи й defense (`*-r8.md`, рецензенти знали про Л1–Л6 як прийняті): 5 запущено / 5 повернулись; ai-slop 0 (+3 неблокуючі), complexity 0 (+3), logical-gaps 2 (+3), edge-cases 3 (+1); defense — 2 пробіли (2, 3) → ред. 9.
 
-**Рев'ю-блок.** task `design-pass ACCT` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED (15 блокерів у 3 лінзах, defense 4 пробіли); ред. 2: `verdict_received` BLOCKED (14 блокерів у 4 лінзах, defense 2 пробіли); ред. 3: `verdict_received` BLOCKED (12 блокерів у 4 лінзах, defense 2 пробіли); ред. 4: `verdict_received` BLOCKED (10 блокерів у 4 лінзах, defense 2 пробіли); ред. 5: `verdict_received` BLOCKED (10 блокерів у 3 лінзах, ai-slop 0; defense 2 пробіли); ред. 6: `verdict_received` BLOCKED (8 блокерів у 4 лінзах, defense 2 пробіли); ред. 7: `verdict_received` BLOCKED (16 блокерів у 4 лінзах, defense 2 пробіли); рішення власника 2026-11-27 — звузити; ред. 8: `verdict_received` BLOCKED (5 блокерів у 2 лінзах, defense 2 пробіли); ред. 9: `verdict_received` BLOCKED (5 блокерів у 2 лінзах, defense 2 пробіли); ред. 10: `verdict_received` BLOCKED (3 спільні блокери, defense 1 пробіл); ред. 11: `verdict_received` BLOCKED (logical-gaps 1; edge-cases 0; defense 0); ред. 12: `prepared`.
+**Вердикт планової критики (ред. 12, `862b3820`).** Лінзи — кожна окремим процесом Codex, останній прогін кожної на ред. 8–12:
+- ai-slop 0 і complexity 0 (ред. 8; їхні неблокуючі прийнято в ред. 9; наступні зміни — читання сесії, тексти й тести, поза їхньою зоною);
+- edge-cases 0 (ред. 11);
+- logical-gaps 0 (ред. 12).
 
-**Допуск: NOT READY** — до вердикту планової критики.
+Defense (ред. 11): **захищено, 0 пробілів**.
+
+| # | Питання defense | Закрито | Вердикт |
+|---|---|---|---|
+| 1 | Невалідний вхід | V1 (гостьова адреса), V2/V3 (S4/E4 для відсутнього й відхиленого токена), V6 | closed |
+| 2 | Збій залежності | V2 «Читання сесії після результату», S0/E0, V5a, Л6 | closed |
+| 3 | Гонки й повтор | V1/V5a (перевірка `isMutating` у момент натискання), V4a, Л1–Л5 | closed |
+| 4 | Порожні й межові дані | V2, V6, V10, V15 | closed |
+| 5 | Відкат | «Відкат» | closed |
+
+Знайдено поза зрізом: серверна гонка enroll/confirm (Л5: `SetUserTotpSecret` безумовно ставить `totp_enabled = false`) — окрема бекенд-задача.
+
+**Рев'ю-блок.** task `design-pass ACCT` · `review_mode=independent_subagent` (Codex CLI) · writer — Courses 1 · reviewer — Codex · план ред. 1: `verdict_received` BLOCKED (15 блокерів у 3 лінзах, defense 4 пробіли); ред. 2: `verdict_received` BLOCKED (14 блокерів у 4 лінзах, defense 2 пробіли); ред. 3: `verdict_received` BLOCKED (12 блокерів у 4 лінзах, defense 2 пробіли); ред. 4: `verdict_received` BLOCKED (10 блокерів у 4 лінзах, defense 2 пробіли); ред. 5: `verdict_received` BLOCKED (10 блокерів у 3 лінзах, ai-slop 0; defense 2 пробіли); ред. 6: `verdict_received` BLOCKED (8 блокерів у 4 лінзах, defense 2 пробіли); ред. 7: `verdict_received` BLOCKED (16 блокерів у 4 лінзах, defense 2 пробіли); рішення власника 2026-11-27 — звузити; ред. 8: `verdict_received` BLOCKED (5 блокерів у 2 лінзах, defense 2 пробіли); ред. 9: `verdict_received` BLOCKED (5 блокерів у 2 лінзах, defense 2 пробіли); ред. 10: `verdict_received` BLOCKED (3 спільні блокери, defense 1 пробіл); ред. 11: `verdict_received` BLOCKED (logical-gaps 1; edge-cases 0; defense 0); ред. 12: `verdict_received` — **ACCEPTED**.
+
+**Допуск: READY** (вердикт ACCEPTED на ред. 12; власник — «Правити все» 2026-11-26 і звуження 2026-11-27). Наступне — код на гілці `design-pass-acct` за згодою власника.
