@@ -51,6 +51,14 @@ Codex, R2 on `78a572b1..6fb97644`: **BLOCK** (`_wip-review-acct-code-r2.md`). Ro
 - **P3: the keyed banner lost its result on a visit to the admin surface.** The resend hook is back in the root layout. A result is shown only to the viewer who pressed (the hook records the viewer id at dispatch), so the account switch stays covered. Route test: unverified admin resends, opens `/admin`, returns, and the result is still there; it fails with the R1 root.
 - **P3: `tooLong` had no test.** Added; it fails when only `tooLong` is dropped.
 
+Codex, R3 on `6fb97644..1b1d70a7`: **BLOCK**, three P3 (`_wip-review-acct-code-r3.md`); all round-2 findings closed. Fixed:
+
+- **A dismissed banner stayed dismissed for the next account** (A → B without a sign-out between). The banner is keyed by the viewer id; the resend hook stays in the root.
+- **«Сеанс завершився» came back** after the same account signed out and in again. Any change of viewer, sign-out included, now drops the recorded press.
+- **The overlap test covered `/verify-email` only.** It now runs on both token routes; the `/email/change/confirm` row fails with the R1 route file.
+
+Each new test fails on the R2 code.
+
 The decision «A3 reads only after S2/S4» in the first version of this record was wrong against V2: the plan was right.
 
 ## Found and fixed during verification (not in the plan)
@@ -65,10 +73,11 @@ The decision «A3 reads only after S2/S4» in the first version of this record w
 | Check | Result |
 |---|---|
 | `npm run format:check`, `lint`, `typecheck` | PASS |
+| Frontend unit (after R3 fixes) | 119 files, 1658/1658 at load average ~10 |
 | Frontend unit (after R2 fixes) | 119 files, 1655/1655 at load average ~12 |
 | Frontend unit (after R1 fixes) | 119 files, 1652/1652 at load average ~15 |
 | Frontend unit (first version) | Before the last three fixes: 119 files, 1624/1624. After them, the full run under a host load average of 15–45 (Kiri VM ~224 % CPU from other work) had 9–11 failures in admin/media/route files: timeouts plus two `findBy` misses. The same four files run alone: 224/227, then 227/227. The ordered `make check` is the gate for this |
-| e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1 and R2 fixes (runs 4 and 5; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
+| e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1, R2 and R3 fixes (runs 4–6; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
 | Full ordered `make check` | NOT_TESTED: needs the owner's consent |
 
 ## Limitations

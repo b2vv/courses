@@ -390,6 +390,8 @@ function Layout() {
       {session.data?.emailVerified === false && (
         <div className="shell">
           <EmailVerificationBanner
+            // Keyed by the viewer: «Закрити» hides the banner for this account only.
+            key={session.data.id}
             isPending={resendVerification.isPending}
             outcome={resendVerification.outcome}
             onResend={() => resendVerification.resend()}

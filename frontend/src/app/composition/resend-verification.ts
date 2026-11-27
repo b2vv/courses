@@ -18,13 +18,19 @@ export function useResendVerification(
   identityDependencies: IdentityDependencies,
   /**
    * The signed-in viewer, where the surface outlives sign-out and sign-in (the root banner).
-   * A result is shown only to the viewer who pressed, so neither it nor a late answer reaches
-   * the next account.
+   * A result is shown only while the viewer who pressed is still the viewer: any change of
+   * viewer (sign-out included) drops it, so neither it nor a late answer reaches the next
+   * account, or the same account after it signs in again.
    */
   viewerId?: string,
 ) {
   const client = useQueryClient();
-  const [pressedBy, setPressedBy] = useState<string>();
+  const [press, setPress] = useState<{ readonly by: string | undefined }>();
+  const [viewer, setViewer] = useState(viewerId);
+  if (viewer !== viewerId) {
+    setViewer(viewerId);
+    setPress(undefined);
+  }
   const mutation = useMutation({
     mutationKey: resendVerificationKey,
     mutationFn: (email: string | undefined) =>
@@ -35,11 +41,11 @@ export function useResendVerification(
   const inFlight = useIsMutating({ mutationKey: resendVerificationKey, exact: true }) > 0;
   const resend = (email?: string) => {
     if (client.isMutating({ mutationKey: resendVerificationKey, exact: true }) > 0) return;
-    setPressedBy(viewerId);
+    setPress({ by: viewerId });
     mutation.mutate(email);
   };
   const outcome: ResendOutcome | undefined =
-    pressedBy !== viewerId
+    press === undefined || press.by !== viewerId
       ? undefined
       : mutation.isSuccess
         ? 'accepted'

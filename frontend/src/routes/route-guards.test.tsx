@@ -3827,40 +3827,82 @@ describe('design-pass ACCT account routes', () => {
     },
   );
 
-  test('ACCT-7 a request left by an earlier visit to the same token does not hold the retry', async () => {
-    const viewer = user('student');
-    answerWith(viewer);
-    let posts = 0;
-    let release: (() => void) | undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    server.use(
-      http.post(auth('verify-email'), async () => {
-        posts += 1;
-        if (posts === 1) {
-          await gate;
-          return HttpResponse.json(envelope('token_used'), { status: 410 });
-        }
-        if (posts === 2) return HttpResponse.json(dependencyUnavailable, { status: 503 });
-        return new HttpResponse(null, { status: 204 });
-      }),
-    );
-    const router = createTestRouter('/verify-email?token=one', viewer);
+  test.each([
+    ['verify-email', '/verify-email', 'Пошту підтверджено'],
+    ['email/change/confirm', '/email/change/confirm', 'Пошту змінено'],
+  ] as const)(
+    'ACCT-7 a request left by an earlier visit to the same token does not hold the retry on %s',
+    async (path, to, heading) => {
+      const viewer = user('student');
+      answerWith(viewer);
+      let posts = 0;
+      let release: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.post(auth(path), async () => {
+          posts += 1;
+          if (posts === 1) {
+            await gate;
+            return HttpResponse.json(envelope('token_used'), { status: 410 });
+          }
+          if (posts === 2) return HttpResponse.json(dependencyUnavailable, { status: 503 });
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      const router = createTestRouter(`${to}?token=one`, viewer);
+      await router.load();
+      renderRouter(router);
+      await waitFor(() => expect(posts).toBe(1));
+      await act(() => router.navigate({ to: '/courses' }));
+      await act(() => router.navigate({ to, search: { token: 'one' } }));
+      const retry = await page().findByRole('button', { name: 'Спробувати ще раз' });
+      expect(posts).toBe(2);
+      await userEvent.click(retry);
+      expect(await page().findByRole('heading', { level: 1, name: heading })).toBeTruthy();
+      expect(posts).toBe(3);
+      if (release === undefined) throw new Error('The first request gate was not initialized');
+      release();
+    },
+  );
+
+  test('ACCT-V1 a dismissed banner stays dismissed only for that account', async () => {
+    const first = unverified();
+    answerWith(first);
+    const router = createTestRouter('/courses', first);
     await router.load();
     renderRouter(router);
-    await waitFor(() => expect(posts).toBe(1));
-    await act(() => router.navigate({ to: '/courses' }));
-    await act(() => router.navigate({ to: '/verify-email', search: { token: 'one' } }));
-    const retry = await page().findByRole('button', { name: 'Спробувати ще раз' });
-    expect(posts).toBe(2);
-    await userEvent.click(retry);
-    expect(
-      await page().findByRole('heading', { level: 1, name: 'Пошту підтверджено' }),
-    ).toBeTruthy();
-    expect(posts).toBe(3);
-    if (release === undefined) throw new Error('The first request gate was not initialized');
-    release();
+    const banner = await screen.findByRole('complementary', { name: 'Підтвердження пошти' });
+    await userEvent.click(within(banner).getByRole('button', { name: 'Закрити' }));
+    expect(screen.queryByRole('complementary', { name: 'Підтвердження пошти' })).toBeNull();
+    const second = { ...first, id: '40000000-0000-4000-8000-000000000009' };
+    answerWith(second);
+    act(() => router.options.context.queryClient.setQueryData(sessionQueryKey, second));
+    expect(await screen.findByRole('complementary', { name: 'Підтвердження пошти' })).toBeTruthy();
+  });
+
+  test('ACCT-V1 signing out drops the result, also for the same account signing in again', async () => {
+    const viewer = unverified();
+    answerWith(viewer);
+    server.use(
+      http.post(auth('resend-verification'), () =>
+        HttpResponse.json(authenticationRequired, { status: 401 }),
+      ),
+    );
+    const router = createTestRouter('/courses', viewer);
+    await router.load();
+    renderRouter(router);
+    const banner = await screen.findByRole('complementary', { name: 'Підтвердження пошти' });
+    await userEvent.click(within(banner).getByRole('button', { name: 'Надіслати лист знову' }));
+    expect(await within(banner).findByText(/Сеанс завершився/)).toBeTruthy();
+    act(() => router.options.context.queryClient.setQueryData(sessionQueryKey, null));
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Підтвердження пошти' })).toBeNull(),
+    );
+    act(() => router.options.context.queryClient.setQueryData(sessionQueryKey, viewer));
+    expect(await screen.findByRole('complementary', { name: 'Підтвердження пошти' })).toBeTruthy();
+    expect(screen.queryByText(/Сеанс завершився/)).toBeNull();
   });
 
   test('ACCT-V1 a resend result survives a visit to the admin surface', async () => {
