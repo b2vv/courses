@@ -1,4 +1,5 @@
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { resendOutcomeOf } from '../../modules/identity';
 import type { ResendOutcome } from '../../modules/identity';
 import { SessionQueryError } from './identity-queries';
@@ -13,8 +14,17 @@ export const resendVerificationKey = ['identity', 'resend-verification'] as cons
  * flight (the mutation is pending in the cache synchronously, before React renders), and each
  * surface shows only the result of its own press.
  */
-export function useResendVerification(identityDependencies: IdentityDependencies) {
+export function useResendVerification(
+  identityDependencies: IdentityDependencies,
+  /**
+   * The signed-in viewer, where the surface outlives sign-out and sign-in (the root banner).
+   * A result is shown only to the viewer who pressed, so neither it nor a late answer reaches
+   * the next account.
+   */
+  viewerId?: string,
+) {
   const client = useQueryClient();
+  const [pressedBy, setPressedBy] = useState<string>();
   const mutation = useMutation({
     mutationKey: resendVerificationKey,
     mutationFn: (email: string | undefined) =>
@@ -25,14 +35,20 @@ export function useResendVerification(identityDependencies: IdentityDependencies
   const inFlight = useIsMutating({ mutationKey: resendVerificationKey, exact: true }) > 0;
   const resend = (email?: string) => {
     if (client.isMutating({ mutationKey: resendVerificationKey, exact: true }) > 0) return;
+    setPressedBy(viewerId);
     mutation.mutate(email);
   };
-  const outcome: ResendOutcome | undefined = mutation.isSuccess
-    ? 'accepted'
-    : mutation.error === null
+  const outcome: ResendOutcome | undefined =
+    pressedBy !== viewerId
       ? undefined
-      : resendOutcomeOf(
-          mutation.error instanceof SessionQueryError ? mutation.error.code : 'invalid_response',
-        );
+      : mutation.isSuccess
+        ? 'accepted'
+        : mutation.error === null
+          ? undefined
+          : resendOutcomeOf(
+              mutation.error instanceof SessionQueryError
+                ? mutation.error.code
+                : 'invalid_response',
+            );
   return { resend, isPending: inFlight, outcome };
 }

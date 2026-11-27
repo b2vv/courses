@@ -3827,6 +3827,63 @@ describe('design-pass ACCT account routes', () => {
     },
   );
 
+  test('ACCT-7 a request left by an earlier visit to the same token does not hold the retry', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    let posts = 0;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.post(auth('verify-email'), async () => {
+        posts += 1;
+        if (posts === 1) {
+          await gate;
+          return HttpResponse.json(envelope('token_used'), { status: 410 });
+        }
+        if (posts === 2) return HttpResponse.json(dependencyUnavailable, { status: 503 });
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=one', viewer);
+    await router.load();
+    renderRouter(router);
+    await waitFor(() => expect(posts).toBe(1));
+    await act(() => router.navigate({ to: '/courses' }));
+    await act(() => router.navigate({ to: '/verify-email', search: { token: 'one' } }));
+    const retry = await page().findByRole('button', { name: 'Спробувати ще раз' });
+    expect(posts).toBe(2);
+    await userEvent.click(retry);
+    expect(
+      await page().findByRole('heading', { level: 1, name: 'Пошту підтверджено' }),
+    ).toBeTruthy();
+    expect(posts).toBe(3);
+    if (release === undefined) throw new Error('The first request gate was not initialized');
+    release();
+  });
+
+  test('ACCT-V1 a resend result survives a visit to the admin surface', async () => {
+    const admin = { ...user('admin'), emailVerified: false };
+    answerWith(admin);
+    server.use(
+      http.post(auth('resend-verification'), () => new HttpResponse(null, { status: 204 })),
+    );
+    const router = createTestRouter('/courses', admin);
+    await router.load();
+    renderRouter(router);
+    const banner = await screen.findByRole('complementary', { name: 'Підтвердження пошти' });
+    await userEvent.click(within(banner).getByRole('button', { name: 'Надіслати лист знову' }));
+    expect(await within(banner).findByText(/Запит прийнято/)).toBeTruthy();
+    await act(() => router.navigate({ to: '/admin' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Підтвердження пошти' })).toBeNull(),
+    );
+    await act(() => router.navigate({ to: '/courses' }));
+    const back = await screen.findByRole('complementary', { name: 'Підтвердження пошти' });
+    expect(within(back).getByText(/Запит прийнято/)).toBeTruthy();
+  });
+
   test('ACCT-S5 reads the session after a failure, so a lost 204 updates the viewer', async () => {
     const viewer = unverified();
     let reads = 0;

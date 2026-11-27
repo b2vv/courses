@@ -45,6 +45,12 @@ Codex, R1 on `58622b51..78a572b1`: **BLOCK** (`_wip-review-acct-code.md`). All f
 - **P3: the E2 held-read test passed without the refresh.** It now asserts that exactly one `/me` read started after the 204. Added an E0 offline route test and a V6 length-message test.
 - **P3: the e2e «wrong code» could be valid.** It now picks a code that is none of the secret's codes for the five steps around now.
 
+Codex, R2 on `78a572b1..6fb97644`: **BLOCK** (`_wip-review-acct-code-r2.md`). Round 1's three P2 closed. New:
+
+- **P2: the token-keyed guard counted another screen's request.** Leave a token route while its request is pending and reopen the same token: when the new attempt fails first, its retry button did nothing until the old request settled. The guard is now this screen's own `ref`, set at dispatch and cleared in that call's `onSettled`. Route test: held first request, reopen, 503, retry → 204; it fails with the R1 route file.
+- **P3: the keyed banner lost its result on a visit to the admin surface.** The resend hook is back in the root layout. A result is shown only to the viewer who pressed (the hook records the viewer id at dispatch), so the account switch stays covered. Route test: unverified admin resends, opens `/admin`, returns, and the result is still there; it fails with the R1 root.
+- **P3: `tooLong` had no test.** Added; it fails when only `tooLong` is dropped.
+
 The decision «A3 reads only after S2/S4» in the first version of this record was wrong against V2: the plan was right.
 
 ## Found and fixed during verification (not in the plan)
@@ -59,9 +65,10 @@ The decision «A3 reads only after S2/S4» in the first version of this record w
 | Check | Result |
 |---|---|
 | `npm run format:check`, `lint`, `typecheck` | PASS |
+| Frontend unit (after R2 fixes) | 119 files, 1655/1655 at load average ~12 |
 | Frontend unit (after R1 fixes) | 119 files, 1652/1652 at load average ~15 |
 | Frontend unit (first version) | Before the last three fixes: 119 files, 1624/1624. After them, the full run under a host load average of 15–45 (Kiri VM ~224 % CPU from other work) had 9–11 failures in admin/media/route files: timeouts plus two `findBy` misses. The same four files run alone: 224/227, then 227/227. The ordered `make check` is the gate for this |
-| e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1 fixes (run 4; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
+| e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1 and R2 fixes (runs 4 and 5; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
 | Full ordered `make check` | NOT_TESTED: needs the owner's consent |
 
 ## Limitations

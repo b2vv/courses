@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
@@ -27,10 +27,7 @@ function ConfirmEmailChangeRoute() {
 function ConfirmEmailChangeScreen({ token }: { readonly token: string | undefined }) {
   const { identityDependencies } = Route.useRouteContext();
   const client = useQueryClient();
-  // Keyed by token: a second retry press before a render is refused at dispatch (ACCT-7).
-  const mutationKey = ['identity', 'confirm-email-change', token ?? ''] as const;
   const confirm = useMutation({
-    mutationKey,
     mutationFn: (value: string) =>
       identityDependencies.session
         .confirmEmailChange({ token: value })
@@ -41,12 +38,29 @@ function ConfirmEmailChangeScreen({ token }: { readonly token: string | undefine
       void identityDependencies.refresh(client);
     },
   });
+  // This screen's own attempt in flight refuses another press at dispatch, before a render
+  // (ACCT-7). Per screen: a request left by an earlier visit to the same token must not hold
+  // this screen's retry (Л3).
+  const attempting = useRef(false);
+  const mutate = confirm.mutate;
+  const attempt = useCallback(
+    (value: string) => {
+      if (attempting.current) return;
+      attempting.current = true;
+      mutate(value, {
+        onSettled: () => {
+          attempting.current = false;
+        },
+      });
+    },
+    [mutate],
+  );
   const started = useRef(false);
   useEffect(() => {
     if (token === undefined || started.current) return;
     started.current = true;
-    confirm.mutate(token);
-  }, [token, confirm]);
+    attempt(token);
+  }, [token, attempt]);
 
   const errorCode: SessionErrorCode | undefined =
     confirm.error === null
@@ -67,8 +81,7 @@ function ConfirmEmailChangeScreen({ token }: { readonly token: string | undefine
       state={state}
       retryPending={confirm.isPending}
       onRetry={() => {
-        if (token !== undefined && client.isMutating({ mutationKey, exact: true }) === 0)
-          confirm.mutate(token);
+        if (token !== undefined) attempt(token);
       }}
     />
   );

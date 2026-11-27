@@ -92,3 +92,15 @@ test('V6 names a length constraint', async () => {
     .join(' ');
   expect(text).toContain('Перевірте довжину значення.');
 });
+
+test('V6 names a value that is too long', async () => {
+  const user = userEvent.setup();
+  form('uk', <TextField label="Short" name="short" maxLength={3} defaultValue="abcdef" />);
+  await user.click(screen.getByRole('button', { name: 'Send' }));
+  const field = screen.getByLabelText('Short');
+  const text = (field.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ');
+  expect(text).toContain('Перевірте довжину значення.');
+});

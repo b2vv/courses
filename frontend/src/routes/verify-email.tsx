@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { useResendVerification } from '../app/composition/resend-verification';
 import { useOnline, useSessionReadAfter } from '../app/composition/session-after';
@@ -30,22 +30,34 @@ function VerifyEmailRoute() {
 
 function VerifyEmailScreen({ token }: { readonly token: string | undefined }) {
   const { identityDependencies } = Route.useRouteContext();
-  const client = useQueryClient();
-  // Keyed by token, so a press is refused at dispatch while this token's request is in flight:
-  // two presses before a render would otherwise both see `isPending === false` (ACCT-7).
-  const mutationKey = ['identity', 'verify-email', token ?? ''] as const;
   const verify = useMutation({
-    mutationKey,
     mutationFn: (value: string) =>
       identityDependencies.session.verify({ token: value }).then(identityDependencies.unwrap),
   });
+  // This screen's own attempt in flight refuses another press at dispatch, before a render
+  // (ACCT-7). Per screen: a request left by an earlier visit to the same token must not hold
+  // this screen's retry (Л3).
+  const attempting = useRef(false);
+  const mutate = verify.mutate;
+  const attempt = useCallback(
+    (value: string) => {
+      if (attempting.current) return;
+      attempting.current = true;
+      mutate(value, {
+        onSettled: () => {
+          attempting.current = false;
+        },
+      });
+    },
+    [mutate],
+  );
   // One automatic attempt per screen, also under StrictMode's repeated effect.
   const started = useRef(false);
   useEffect(() => {
     if (token === undefined || started.current) return;
     started.current = true;
-    verify.mutate(token);
-  }, [token, verify]);
+    attempt(token);
+  }, [token, attempt]);
   const resend = useResendVerification(identityDependencies);
   const online = useOnline();
 
@@ -111,8 +123,7 @@ function VerifyEmailScreen({ token }: { readonly token: string | undefined }) {
       retryPending={verify.isPending}
       onResend={(email) => resend.resend(email)}
       onRetry={() => {
-        if (token !== undefined && client.isMutating({ mutationKey, exact: true }) === 0)
-          verify.mutate(token);
+        if (token !== undefined) attempt(token);
       }}
     />
   );
