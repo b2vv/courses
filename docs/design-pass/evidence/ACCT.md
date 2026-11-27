@@ -59,6 +59,8 @@ Codex, R3 on `6fb97644..1b1d70a7`: **BLOCK**, three P3 (`_wip-review-acct-code-r
 
 Each new test fails on the R2 code.
 
+Codex, R4 on `1b1d70a7..fb092d77`: **PASS**, no P1/P2/P3 (`_wip-review-acct-code-r4.md`). All round-3 findings closed; for each, the reviewer traced that reverting the fix fails its test. Л1–Л6 not worsened.
+
 The decision «A3 reads only after S2/S4» in the first version of this record was wrong against V2: the plan was right.
 
 ## Found and fixed during verification (not in the plan)
