@@ -80,7 +80,22 @@ The decision «A3 reads only after S2/S4» in the first version of this record w
 | Frontend unit (after R1 fixes) | 119 files, 1652/1652 at load average ~15 |
 | Frontend unit (first version) | Before the last three fixes: 119 files, 1624/1624. After them, the full run under a host load average of 15–45 (Kiri VM ~224 % CPU from other work) had 9–11 failures in admin/media/route files: timeouts plus two `findBy` misses. The same four files run alone: 224/227, then 227/227. The ordered `make check` is the gate for this |
 | e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1, R2 and R3 fixes (runs 4–6; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
-| Full ordered `make check` | NOT_TESTED: needs the owner's consent |
+| Full ordered `make check` on `cf3e7cf0` | **Red three times**, each time one playback test only (everything before e2e green: unit 1658/1658; B19 7/7). Run 1: P08 «watched 24.7 s, want > 25». Run 2: audio-tracks S7 «Пауза» not shown within 5 s. See «Gate attempts» below |
+
+## Gate attempts
+
+Both red gates failed in playback only, with the same shape: the video did not start, or play long enough, inside the test's time budget.
+
+- P08 alone, accelerated profile, same commit: 3/3 pass.
+- The S7 block alone: `main` 6/6 runs green; the branch 2 of 5, then 2 of 6 runs with a failure. One of those was a 10-minute transcode timeout in the fixture.
+- The trace of one branch failure: the second lesson's `POST /api/v1/playback/sessions` left the browser at 12:29:53.85. The API logged it as finished at 12:29:58.84 with `durationMs 3713`, against 1–4 ms for the same call a few seconds earlier, so about 1.3 s passed before the API even got it. The video cannot start before that answer. The slice does not change the backend or this request.
+- The Kiri VM at the time: 12 GiB, 98 MiB free and 578 MiB available, no swap. Memory pressure `full avg60` = 7.7 % (all tasks stalled about 8 % of the time). Other projects' containers share the VM (elasticsearch at 88 % CPU and 1.2 GiB, kibana, cassiopeia, factory-storage). This matches the recorded gotcha on Kiri memory stalls.
+
+- Run 3, after the owner had Cassiopeia's 10 containers stopped (VM available memory 578 MiB → 5666 MiB): red again on one playback test, subtitles E4b «en showing cue returns after release» (unit 1658/1658, B19 7/7, 129 passed, 47 did not run). The MS4 block alone on the branch then: 3/3 runs, 45/45.
+
+Each red gate failed on a different playback test, and each of them passes alone. No full gate was run on `main` today for comparison.
+
+No mechanism links the slice to these failures. The `main`/branch difference is 0/6 against 2/5, a small sample. The two red gates are not counted as a pass.
 
 ## Limitations
 
