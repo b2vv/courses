@@ -35,6 +35,18 @@
 
 164 captures in 45 scenes (158 in the full run, plus 6 for the banner scene): 6 viewports (390, 768, 1024, 1440, 390 at 200 %, 320) for the main state of each screen, and phone plus desktop for the others. Dark theme and EN are included. axe (`wcag2a/aa/21aa/22aa`): 0 violations, 0 contrast `incomplete`. Horizontal overflow 0, clipped text 0. The scripts and images are kept outside the repository.
 
+## Code review
+
+Codex, R1 on `58622b51..78a572b1`: **BLOCK** (`_wip-review-acct-code.md`). All five findings were confirmed and fixed:
+
+- **P2: no session read after S5.** V2 asks for one read after every result but 403; the code read only after S2/S4. A lost 204 behind a timeout left the cached viewer unverified and the banner on screen. The read now follows S5 too (not 403). Route test: a 503 whose write went through hides the banner; it fails with the old trigger.
+- **P2: a resend result crossed accounts.** The banner's resend hook lived in the root layout, which survives sign-out and sign-in. The banner is now its own component keyed by the viewer id. Route test: account A's «Запит прийнято» is gone for account B; it fails with a constant key.
+- **P2: two retry presses before a render.** Both token routes now key their mutation by token and refuse a press at dispatch while that token's request is in flight. Route test: two presses in one `act` send one request on each route; both fail without the guard.
+- **P3: the E2 held-read test passed without the refresh.** It now asserts that exactly one `/me` read started after the 204. Added an E0 offline route test and a V6 length-message test.
+- **P3: the e2e «wrong code» could be valid.** It now picks a code that is none of the secret's codes for the five steps around now.
+
+The decision «A3 reads only after S2/S4» in the first version of this record was wrong against V2: the plan was right.
+
 ## Found and fixed during verification (not in the plan)
 
 - **axe `role-img-alt` after a 2FA action (e2e Acc26).** A focused React Aria `Button` that turns `isPending` announces itself through the live announcer with `aria-labelledby=<its id>`, and the announcer keeps that node for 7 s. «Увімкнути 2FA», «Підтвердити 2FA», the two forms' buttons and «Спробувати ще раз» are unmounted by their own success, so the node pointed at nothing. Those buttons now use `aria-disabled` and the dispatch guards, as `CourseListView` does. `isPending` stays only on buttons that remain on screen (resend, password, email). The e2e `axeClean` now prints the node target.
@@ -47,8 +59,9 @@
 | Check | Result |
 |---|---|
 | `npm run format:check`, `lint`, `typecheck` | PASS |
-| Frontend unit | Before the last three fixes: 119 files, 1624/1624. After them, the full run under a host load average of 15–45 (Kiri VM ~224 % CPU from other work) had 9–11 failures in admin/media/route files: timeouts plus two `findBy` misses. The same four files run alone: 224/227, then 227/227. The ordered `make check` is the gate for this |
-| e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget (run 3; run 1 failed on the axe finding above, run 2 printed its node) |
+| Frontend unit (after R1 fixes) | 119 files, 1652/1652 at load average ~15 |
+| Frontend unit (first version) | Before the last three fixes: 119 files, 1624/1624. After them, the full run under a host load average of 15–45 (Kiri VM ~224 % CPU from other work) had 9–11 failures in admin/media/route files: timeouts plus two `findBy` misses. The same four files run alone: 224/227, then 227/227. The ordered `make check` is the gate for this |
+| e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1 fixes (run 4; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
 | Full ordered `make check` | NOT_TESTED: needs the owner's consent |
 
 ## Limitations

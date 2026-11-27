@@ -79,3 +79,16 @@ test('V6 keeps the text of a validate function and of form-level errors', async 
   expect(described('Name')).toContain('Не більше трьох символів');
   expect(described('Server')).toContain('Сервер каже ні');
 });
+
+test('V6 names a length constraint', async () => {
+  const user = userEvent.setup();
+  form('uk', <TextField label="Code" name="code" minLength={6} />);
+  await user.type(screen.getByLabelText('Code'), '123');
+  await user.click(screen.getByRole('button', { name: 'Send' }));
+  const code = screen.getByLabelText('Code');
+  const text = (code.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ');
+  expect(text).toContain('Перевірте довжину значення.');
+});

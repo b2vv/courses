@@ -3738,8 +3738,10 @@ describe('design-pass ACCT account routes', () => {
       release = resolve;
     });
     let held = false;
+    let heldReads = 0;
     server.use(
       http.get(currentUserUrl, async () => {
+        if (held) heldReads += 1;
         if (held) await gate;
         return HttpResponse.json(viewer);
       }),
@@ -3753,8 +3755,124 @@ describe('design-pass ACCT account routes', () => {
     renderRouter(router);
     expect(await page().findByRole('heading', { level: 1, name: 'Пошту змінено' })).toBeTruthy();
     expect(page().getByRole('link', { name: 'Налаштування акаунта' })).toBeTruthy();
+    // The 204 started a session read (V3), and E2 did not wait for it.
+    await waitFor(() => expect(heldReads).toBe(1));
     if (release === undefined) throw new Error('The session gate was not initialized');
     release();
+  });
+
+  test('ACCT-6 E0 waits offline without sending the link', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    let posts = 0;
+    server.use(
+      http.post(auth('email/change/confirm'), () => {
+        posts += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    onlineManager.setOnline(false);
+    try {
+      const router = createTestRouter('/email/change/confirm?token=one', viewer);
+      await router.load();
+      renderRouter(router);
+      expect(await page().findByText("Чекаємо на з'єднання…")).toBeTruthy();
+      expect(posts).toBe(0);
+      act(() => onlineManager.setOnline(true));
+      expect(await page().findByRole('heading', { level: 1, name: 'Пошту змінено' })).toBeTruthy();
+      expect(posts).toBe(1);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  test.each([
+    ['/verify-email?token=one', 'verify-email'],
+    ['/email/change/confirm?token=one', 'email/change/confirm'],
+  ] as const)(
+    'ACCT-7 two retry presses before a render on %s send one request',
+    async (href, path) => {
+      const viewer = user('student');
+      answerWith(viewer);
+      let posts = 0;
+      let release: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.post(auth(path), async () => {
+          posts += 1;
+          if (posts === 1) return HttpResponse.json(dependencyUnavailable, { status: 503 });
+          await gate;
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      const router = createTestRouter(href, viewer);
+      await router.load();
+      renderRouter(router);
+      const retry = await page().findByRole('button', { name: 'Спробувати ще раз' });
+      // Both presses inside one act: React has not rendered the first one's pending state.
+      act(() => {
+        retry.click();
+        retry.click();
+      });
+      await waitFor(() => expect(posts).toBe(2));
+      if (release === undefined) throw new Error('The retry gate was not initialized');
+      release();
+      expect(await page().findByRole('heading', { level: 1 })).toBeTruthy();
+      await waitFor(() =>
+        expect(page().queryByRole('button', { name: 'Спробувати ще раз' })).toBeNull(),
+      );
+      expect(posts).toBe(2);
+    },
+  );
+
+  test('ACCT-S5 reads the session after a failure, so a lost 204 updates the viewer', async () => {
+    const viewer = unverified();
+    let reads = 0;
+    let verifiedNow = false;
+    server.use(
+      http.get(currentUserUrl, () => {
+        reads += 1;
+        return HttpResponse.json({ ...viewer, emailVerified: verifiedNow });
+      }),
+      http.post(auth('verify-email'), () => {
+        verifiedNow = true;
+        return HttpResponse.json(dependencyUnavailable, { status: 503 });
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=one', viewer);
+    await router.load();
+    const before = reads;
+    renderRouter(router);
+    expect(await page().findByRole('button', { name: 'Спробувати ще раз' })).toBeTruthy();
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Підтвердження пошти' })).toBeNull(),
+    );
+  });
+
+  test('ACCT-V1 a resend result does not carry over to the next signed-in account', async () => {
+    const first = unverified();
+    answerWith(first);
+    server.use(
+      http.post(auth('resend-verification'), () => new HttpResponse(null, { status: 204 })),
+    );
+    const router = createTestRouter('/courses', first);
+    await router.load();
+    renderRouter(router);
+    const banner = await screen.findByRole('complementary', { name: 'Підтвердження пошти' });
+    await userEvent.click(within(banner).getByRole('button', { name: 'Надіслати лист знову' }));
+    expect(await within(banner).findByText(/Запит прийнято/)).toBeTruthy();
+    const second = {
+      ...first,
+      id: '40000000-0000-4000-8000-000000000009',
+      email: 'next@example.test',
+    };
+    answerWith(second);
+    act(() => router.options.context.queryClient.setQueryData(sessionQueryKey, second));
+    await waitFor(() => expect(screen.queryByText(/Запит прийнято/)).toBeNull());
+    expect(screen.getByRole('complementary', { name: 'Підтвердження пошти' })).toBeTruthy();
   });
 
   test('ACCT-6 has no retry for a refused origin', async () => {

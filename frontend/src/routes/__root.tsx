@@ -26,6 +26,7 @@ import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../modules/identity';
 import { EmailVerificationBanner } from '../modules/identity';
 import { useResendVerification } from '../app/composition/resend-verification';
+import type { IdentityDependencies } from '../app/composition/identity';
 import { MenuCard, StatusPage, Toast } from '../presentation/ui';
 import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
 import type { createI18n } from '../app/providers/i18n';
@@ -234,7 +235,6 @@ function Layout() {
     [router, learn],
   );
   useFocusAfterNavigation();
-  const resendVerification = useResendVerification(identityDependencies);
 
   // The admin side is its own root layout: AdminShell (sidebar + top bar + the
   // #main skip target) replaces the client header and footer. It lives here, not
@@ -387,10 +387,11 @@ function Layout() {
       </header>
       {session.data?.emailVerified === false && (
         <div className="shell">
-          <EmailVerificationBanner
-            isPending={resendVerification.isPending}
-            outcome={resendVerification.outcome}
-            onResend={() => resendVerification.resend()}
+          {/* Keyed by the viewer: the layout survives sign-out and sign-in, and one account's
+              resend result (or its late answer) must not show to the next (ACCT V1). */}
+          <ViewerVerificationBanner
+            key={session.data.id}
+            identityDependencies={identityDependencies}
           />
         </div>
       )}
@@ -422,5 +423,20 @@ function Layout() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function ViewerVerificationBanner({
+  identityDependencies,
+}: {
+  readonly identityDependencies: IdentityDependencies;
+}) {
+  const resend = useResendVerification(identityDependencies);
+  return (
+    <EmailVerificationBanner
+      isPending={resend.isPending}
+      outcome={resend.outcome}
+      onResend={() => resend.resend()}
+    />
   );
 }

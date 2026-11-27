@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { useResendVerification } from '../app/composition/resend-verification';
 import { useOnline, useSessionReadAfter } from '../app/composition/session-after';
@@ -30,7 +30,12 @@ function VerifyEmailRoute() {
 
 function VerifyEmailScreen({ token }: { readonly token: string | undefined }) {
   const { identityDependencies } = Route.useRouteContext();
+  const client = useQueryClient();
+  // Keyed by token, so a press is refused at dispatch while this token's request is in flight:
+  // two presses before a render would otherwise both see `isPending === false` (ACCT-7).
+  const mutationKey = ['identity', 'verify-email', token ?? ''] as const;
   const verify = useMutation({
+    mutationKey,
     mutationFn: (value: string) =>
       identityDependencies.session.verify({ token: value }).then(identityDependencies.unwrap),
   });
@@ -58,12 +63,13 @@ function VerifyEmailScreen({ token }: { readonly token: string | undefined }) {
         : errorCode !== undefined
           ? 'failed'
           : 'in-flight';
-  // The read is tied to this result: a retry that ends the same way reads again.
+  // One read after every result but 403 (plan §18 V2): a lost 204 behind S5 may have verified
+  // the address. The read is tied to this result: a retry that ends the same way reads again.
   const read = useSessionReadAfter(
     identityDependencies,
-    result === 'verified' || result === 'link-failed'
-      ? `${result}:${verify.submittedAt}`
-      : undefined,
+    result === 'in-flight' || errorCode === 'origin_forbidden'
+      ? undefined
+      : `${result}:${verify.submittedAt}`,
   );
   const offline = read?.status === 'pending' && !online;
 
@@ -105,7 +111,8 @@ function VerifyEmailScreen({ token }: { readonly token: string | undefined }) {
       retryPending={verify.isPending}
       onResend={(email) => resend.resend(email)}
       onRetry={() => {
-        if (token !== undefined && !verify.isPending) verify.mutate(token);
+        if (token !== undefined && client.isMutating({ mutationKey, exact: true }) === 0)
+          verify.mutate(token);
       }}
     />
   );

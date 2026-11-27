@@ -615,7 +615,16 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
     .getByLabel('Секрет для ручного налаштування')
     .inputValue();
   // A wrong code by Enter keeps focus on the button (jsdom does not see a `disabled` focus loss).
-  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill('000000');
+  // A code that is none of the secret's codes in the steps around now, so it is surely wrong.
+  const nearStep = Math.floor(Date.now() / totpPeriodMs);
+  const nearCodes = [-2, -1, 0, 1, 2].map((offset) =>
+    totp(adminResetSecret, (nearStep + offset) * totpPeriodMs),
+  );
+  const wrongCode = ['000000', '111111', '222222', '333333', '444444', '555555'].find(
+    (candidate) => !nearCodes.includes(candidate),
+  );
+  if (wrongCode === undefined) throw new Error('No wrong TOTP code could be chosen');
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(wrongCode);
   const confirmButton = twoFactor.getByRole('button', { name: 'Підтвердити 2FA' });
   await confirmButton.focus();
   await page.keyboard.press('Enter');

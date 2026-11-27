@@ -27,7 +27,10 @@ function ConfirmEmailChangeRoute() {
 function ConfirmEmailChangeScreen({ token }: { readonly token: string | undefined }) {
   const { identityDependencies } = Route.useRouteContext();
   const client = useQueryClient();
+  // Keyed by token: a second retry press before a render is refused at dispatch (ACCT-7).
+  const mutationKey = ['identity', 'confirm-email-change', token ?? ''] as const;
   const confirm = useMutation({
+    mutationKey,
     mutationFn: (value: string) =>
       identityDependencies.session
         .confirmEmailChange({ token: value })
@@ -64,7 +67,8 @@ function ConfirmEmailChangeScreen({ token }: { readonly token: string | undefine
       state={state}
       retryPending={confirm.isPending}
       onRetry={() => {
-        if (token !== undefined && !confirm.isPending) confirm.mutate(token);
+        if (token !== undefined && client.isMutating({ mutationKey, exact: true }) === 0)
+          confirm.mutate(token);
       }}
     />
   );
