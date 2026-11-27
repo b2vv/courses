@@ -1,5 +1,6 @@
 import type { ReactNode, Ref } from 'react';
 import * as Aria from 'react-aria-components';
+import { useTranslation } from 'react-i18next';
 
 type ButtonProps = Omit<Aria.ButtonProps, 'className'> & {
   variant?: 'primary' | 'secondary' | 'danger';
@@ -32,12 +33,31 @@ type FieldProps = Omit<Aria.TextFieldProps, 'children' | 'className'> & {
   placeholder?: string;
 };
 
+/**
+ * The message for a failed constraint in the page's language (design-pass ACCT V6). Without it
+ * React Aria shows the browser's own validation text, which follows the browser's language,
+ * not the page's. An explicit `errorMessage` still wins.
+ */
+function useConstraintMessage(type: string | undefined) {
+  const { t } = useTranslation();
+  return ({ validationDetails, validationErrors }: Aria.ValidationResult) => {
+    if (validationDetails.valueMissing) return t('ui.fieldRequired');
+    if (validationDetails.typeMismatch)
+      return t(type === 'email' ? 'ui.fieldEmail' : 'ui.fieldInvalid');
+    if (validationDetails.tooLong || validationDetails.tooShort) return t('ui.fieldLength');
+    // A `validate` function or form-level errors already speak the page's language.
+    if (validationDetails.customError && validationErrors.length > 0)
+      return validationErrors.join(' ');
+    return t('ui.fieldInvalid');
+  };
+}
+
 function FieldHelp({
   description,
   errorMessage,
 }: {
   description: string | undefined;
-  errorMessage: string | undefined;
+  errorMessage: string | ((validation: Aria.ValidationResult) => string) | undefined;
 }) {
   return (
     <>
@@ -59,6 +79,7 @@ export function TextField({
   ref,
   ...props
 }: FieldProps & { ref?: Ref<HTMLInputElement> }) {
+  const constraintMessage = useConstraintMessage(props.type);
   return (
     <Aria.TextField {...props} className="ui-field">
       <Aria.Label>{label}</Aria.Label>
@@ -67,7 +88,7 @@ export function TextField({
         {...(placeholder === undefined ? {} : { placeholder })}
         className="ui-input"
       />
-      <FieldHelp description={description} errorMessage={errorMessage} />
+      <FieldHelp description={description} errorMessage={errorMessage ?? constraintMessage} />
     </Aria.TextField>
   );
 }
@@ -80,11 +101,12 @@ export function TextArea({
   ref,
   ...props
 }: FieldProps & { ref?: Ref<HTMLTextAreaElement> }) {
+  const constraintMessage = useConstraintMessage(props.type);
   return (
     <Aria.TextField {...props} className="ui-field">
       <Aria.Label>{label}</Aria.Label>
       <Aria.TextArea ref={ref} placeholder={placeholder} className="ui-input ui-textarea" />
-      <FieldHelp description={description} errorMessage={errorMessage} />
+      <FieldHelp description={description} errorMessage={errorMessage ?? constraintMessage} />
     </Aria.TextField>
   );
 }

@@ -7,6 +7,7 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -3353,4 +3354,603 @@ test('C3b review: a continue token left untaken by an interrupted redirect does 
   });
   expect(await screen.findByRole('heading', { name: 'Only lesson' })).toBeTruthy();
   expect(reads).toBe(2);
+});
+
+describe('design-pass ACCT account routes', () => {
+  const auth = (path: string) => `${apiOrigin()}/api/v1/auth/${path}`;
+  const envelope = (code: string) => ({
+    error: { code, message: 'x', requestId: 'c'.repeat(32) },
+  });
+  const unverified = (): AuthenticatedUser => ({ ...user('student'), emailVerified: false });
+
+  /** The page itself: the shell header repeats «Увійти» and other links. */
+  const page = () => within(screen.getByRole('main'));
+
+  function renderStrict(router: ReturnType<typeof createTestRouter>) {
+    return render(
+      <StrictMode>
+        <QueryClientProvider client={router.options.context.queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+  }
+
+  test('ACCT-S2 sends one verify request under StrictMode and leads a viewer to learning', async () => {
+    const verified = user('student');
+    answerWith(verified);
+    let posts = 0;
+    server.use(
+      http.post(auth('verify-email'), () => {
+        posts += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=one', verified);
+    await router.load();
+    renderStrict(router);
+    expect(await page().findByRole('link', { name: 'До навчання' })).toBeTruthy();
+    expect(page().getByRole('heading', { level: 1, name: 'Пошту підтверджено' })).toBeTruthy();
+    expect(posts).toBe(1);
+  });
+
+  test('ACCT-S2 offers a guest the sign-in link after a verified link', async () => {
+    answerWith(null);
+    server.use(http.post(auth('verify-email'), () => new HttpResponse(null, { status: 204 })));
+    const router = createTestRouter('/verify-email?token=one', null);
+    await router.load();
+    renderRouter(router);
+    expect(await page().findByRole('link', { name: 'Увійти' })).toBeTruthy();
+    expect(page().queryByRole('link', { name: 'До навчання' })).toBeNull();
+  });
+
+  test('ACCT-S4 treats a missing token as a failed link without a request, and resends for a guest', async () => {
+    answerWith(null);
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(auth('verify-email'), () => {
+        throw new Error('no token: the page must not ask the server');
+      }),
+      http.post(auth('resend-verification'), async ({ request }) => {
+        bodies.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/verify-email', null);
+    await router.load();
+    renderRouter(router);
+    const field = await page().findByLabelText('Електронна пошта');
+    await userEvent.type(field, 'student@example.com');
+    await userEvent.click(page().getByRole('button', { name: 'Надіслати лист знову' }));
+    expect(await page().findByText(/Запит прийнято/)).toBeTruthy();
+    expect(bodies).toEqual([{ email: 'student@example.com' }]);
+  });
+
+  test('ACCT-S3 tells a verified viewer that a used link changes nothing', async () => {
+    const verified = user('student');
+    answerWith(verified);
+    server.use(
+      http.post(auth('verify-email'), () =>
+        HttpResponse.json(envelope('token_used'), { status: 410 }),
+      ),
+    );
+    const router = createTestRouter('/verify-email?token=used', verified);
+    await router.load();
+    renderRouter(router);
+    expect(
+      await page().findByRole('heading', { level: 1, name: 'Пошту вже підтверджено' }),
+    ).toBeTruthy();
+  });
+
+  test('ACCT-S4 offers a reload when the session cannot be read after a failed link', async () => {
+    server.use(
+      http.get(currentUserUrl, () => HttpResponse.json(dependencyUnavailable, { status: 503 })),
+      http.post(auth('verify-email'), () =>
+        HttpResponse.json(envelope('token_used'), { status: 410 }),
+      ),
+    );
+    const router = createTestRouter('/verify-email?token=used', null);
+    await router.load();
+    renderRouter(router);
+    expect(await page().findByRole('button', { name: 'Оновити сторінку' })).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Надіслати лист знову' })).toBeNull();
+  });
+
+  test('ACCT-V1 two resend surfaces send one request and each shows only its own result', async () => {
+    const viewer = unverified();
+    answerWith(viewer);
+    let posts = 0;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.post(auth('verify-email'), () =>
+        HttpResponse.json(envelope('token_used'), { status: 410 }),
+      ),
+      http.post(auth('resend-verification'), async () => {
+        posts += 1;
+        await gate;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=used', viewer);
+    await router.load();
+    renderRouter(router);
+    const banner = await screen.findByRole('complementary', { name: 'Підтвердження пошти' });
+    const heading = await page().findByRole('heading', { level: 1, name: 'Посилання не працює' });
+    const pageSection = heading.closest('section');
+    if (pageSection === null) throw new Error('The verify page section is missing');
+    const pageButton = await within(pageSection).findByRole('button', {
+      name: 'Надіслати лист знову',
+    });
+    fireEvent.click(within(banner).getByRole('button', { name: 'Надіслати лист знову' }));
+    fireEvent.click(pageButton);
+    await waitFor(() => expect(posts).toBe(1));
+    if (release === undefined) throw new Error('The resend gate was not initialized');
+    release();
+    expect(await within(banner).findByText(/Запит прийнято/)).toBeTruthy();
+    expect(within(pageSection).queryByText(/Запит прийнято/)).toBeNull();
+    expect(posts).toBe(1);
+  });
+
+  test('ACCT-V1 a resend refused for an ended session offers sign-in', async () => {
+    const viewer = unverified();
+    answerWith(viewer);
+    server.use(
+      http.post(auth('verify-email'), () =>
+        HttpResponse.json(envelope('token_used'), { status: 410 }),
+      ),
+      http.post(auth('resend-verification'), () =>
+        HttpResponse.json(authenticationRequired, { status: 401 }),
+      ),
+    );
+    const router = createTestRouter('/verify-email?token=used', viewer);
+    await router.load();
+    renderRouter(router);
+    const heading = await page().findByRole('heading', { level: 1, name: 'Посилання не працює' });
+    const pageSection = heading.closest('section');
+    if (pageSection === null) throw new Error('The verify page section is missing');
+    await userEvent.click(
+      await within(pageSection).findByRole('button', { name: 'Надіслати лист знову' }),
+    );
+    const alert = await within(pageSection).findByRole('alert');
+    expect(alert.textContent).toContain('Сеанс завершився');
+    expect(within(alert).getByRole('link', { name: 'Увійти' }).getAttribute('href')).toBe('/login');
+  });
+
+  test.each([
+    [204, 'Пошту змінено', null],
+    [409, 'Пошту не змінено', 'email_taken'],
+    [410, 'Посилання не працює', 'token_used'],
+  ] as const)('ACCT-E confirm-email answers %i with «%s»', async (status, heading, code) => {
+    const viewer = user('student');
+    answerWith(viewer);
+    let posts = 0;
+    server.use(
+      http.post(auth('email/change/confirm'), () => {
+        posts += 1;
+        return code === null
+          ? new HttpResponse(null, { status })
+          : HttpResponse.json(envelope(code), { status });
+      }),
+    );
+    const router = createTestRouter('/email/change/confirm?token=one', viewer);
+    await router.load();
+    renderStrict(router);
+    expect(await page().findByRole('heading', { level: 1, name: heading })).toBeTruthy();
+    expect(page().getByRole('link', { name: /Перейти до налаштувань|Налаштування/ })).toBeTruthy();
+    expect(posts).toBe(1);
+  });
+
+  test('ACCT-S0 waits offline without sending the link, then verifies once online', async () => {
+    const verified = user('student');
+    answerWith(verified);
+    let posts = 0;
+    server.use(
+      http.post(auth('verify-email'), () => {
+        posts += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    onlineManager.setOnline(false);
+    try {
+      const router = createTestRouter('/verify-email?token=one', verified);
+      await router.load();
+      renderRouter(router);
+      expect(await page().findByText("Чекаємо на з'єднання…")).toBeTruthy();
+      expect(posts).toBe(0);
+      act(() => onlineManager.setOnline(true));
+      expect(await page().findByRole('link', { name: 'До навчання' })).toBeTruthy();
+      expect(posts).toBe(1);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  test('ACCT-S2 holds the action while the session read is paused offline', async () => {
+    const verified = user('student');
+    answerWith(verified);
+    server.use(
+      http.post(auth('verify-email'), () => {
+        onlineManager.setOnline(false);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    try {
+      const router = createTestRouter('/verify-email?token=one', verified);
+      await router.load();
+      renderRouter(router);
+      expect(
+        await page().findByRole('heading', { level: 1, name: 'Пошту підтверджено' }),
+      ).toBeTruthy();
+      expect(await page().findByText("Чекаємо на з'єднання…")).toBeTruthy();
+      expect(page().queryByRole('link')).toBeNull();
+      act(() => onlineManager.setOnline(true));
+      expect(await page().findByRole('link', { name: 'До навчання' })).toBeTruthy();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  test('ACCT-S2 offers sign-in when the session read after 204 fails', async () => {
+    server.use(
+      http.get(currentUserUrl, () => HttpResponse.json(dependencyUnavailable, { status: 503 })),
+      http.post(auth('verify-email'), () => new HttpResponse(null, { status: 204 })),
+    );
+    const router = createTestRouter('/verify-email?token=one', null);
+    await router.load();
+    renderRouter(router);
+    expect(await page().findByRole('link', { name: 'Увійти' })).toBeTruthy();
+  });
+
+  test('ACCT-S2 leads a viewer whom the token did not verify to learning too (Л4)', async () => {
+    const viewer = unverified();
+    answerWith(viewer);
+    server.use(http.post(auth('verify-email'), () => new HttpResponse(null, { status: 204 })));
+    const router = createTestRouter('/verify-email?token=other', viewer);
+    await router.load();
+    renderRouter(router);
+    expect(await page().findByRole('link', { name: 'До навчання' })).toBeTruthy();
+  });
+
+  test('ACCT-S5 retries a failure and a spent token on retry becomes a failed link', async () => {
+    answerWith(null);
+    const answers = [
+      () => HttpResponse.json(dependencyUnavailable, { status: 503 }),
+      () => HttpResponse.json(envelope('token_used'), { status: 410 }),
+    ];
+    server.use(
+      http.post(auth('verify-email'), () => {
+        const next = answers.shift();
+        if (next === undefined) throw new Error('Unexpected third verify');
+        return next();
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=one', null);
+    await router.load();
+    renderRouter(router);
+    expect((await page().findByRole('alert')).textContent).toContain(
+      'Можливо, пошту вже підтверджено.',
+    );
+    await userEvent.click(page().getByRole('button', { name: 'Спробувати ще раз' }));
+    expect(
+      await page().findByRole('heading', { level: 1, name: 'Посилання не працює' }),
+    ).toBeTruthy();
+    expect(await page().findByLabelText('Електронна пошта')).toBeTruthy();
+  });
+
+  test('ACCT-S5 has no retry for a refused origin', async () => {
+    answerWith(null);
+    server.use(
+      http.post(auth('verify-email'), () =>
+        HttpResponse.json(envelope('origin_forbidden'), { status: 403 }),
+      ),
+    );
+    const router = createTestRouter('/verify-email?token=one', null);
+    await router.load();
+    renderRouter(router);
+    expect(await page().findByRole('link', { name: 'На головну' })).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Спробувати ще раз' })).toBeNull();
+  });
+
+  test('ACCT-S4 keeps the guest field and its focus through a background session refresh', async () => {
+    answerWith(null);
+    let reads = 0;
+    server.use(
+      http.get(currentUserUrl, () => {
+        reads += 1;
+        return HttpResponse.json(authenticationRequired, { status: 401 });
+      }),
+    );
+    const router = createTestRouter('/verify-email', null);
+    await router.load();
+    renderRouter(router);
+    const field = await page().findByLabelText('Електронна пошта');
+    await userEvent.type(field, 'student@');
+    expect(document.activeElement).toBe(field);
+    const before = reads;
+    await act(() =>
+      router.options.context.queryClient.invalidateQueries({ queryKey: sessionQueryKey }),
+    );
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+    expect(page().getByLabelText('Електронна пошта')).toBe(field);
+    expect(document.activeElement).toBe(field);
+    expect((field as HTMLInputElement).value).toBe('student@');
+  });
+
+  test('ACCT-V1 a signed-in resend sends an empty body', async () => {
+    const viewer = unverified();
+    answerWith(viewer);
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(auth('verify-email'), () =>
+        HttpResponse.json(envelope('token_used'), { status: 410 }),
+      ),
+      http.post(auth('resend-verification'), async ({ request }) => {
+        bodies.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=used', viewer);
+    await router.load();
+    renderRouter(router);
+    const heading = await page().findByRole('heading', { level: 1, name: 'Посилання не працює' });
+    const pageSection = heading.closest('section');
+    if (pageSection === null) throw new Error('The verify page section is missing');
+    await userEvent.click(
+      await within(pageSection).findByRole('button', { name: 'Надіслати лист знову' }),
+    );
+    expect(await within(pageSection).findByText(/Запит прийнято/)).toBeTruthy();
+    expect(bodies).toEqual([{}]);
+  });
+
+  test('ACCT-7 a second token is a new screen with its own request', async () => {
+    const verified = user('student');
+    answerWith(verified);
+    const tokens: unknown[] = [];
+    server.use(
+      http.post(auth('verify-email'), async ({ request }) => {
+        const body = await request.json();
+        tokens.push(body);
+        return typeof body === 'object' && body !== null && 'token' in body && body.token === 'one'
+          ? HttpResponse.json(envelope('token_used'), { status: 410 })
+          : new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/verify-email?token=one', verified);
+    await router.load();
+    renderStrict(router);
+    expect(
+      await page().findByRole('heading', { level: 1, name: 'Пошту вже підтверджено' }),
+    ).toBeTruthy();
+    await act(() => router.navigate({ to: '/verify-email', search: { token: 'two' } }));
+    expect(
+      await page().findByRole('heading', { level: 1, name: 'Пошту підтверджено' }),
+    ).toBeTruthy();
+    expect(tokens).toEqual([{ token: 'one' }, { token: 'two' }]);
+  });
+
+  test('ACCT-6 shows E2 and its action before the held session read returns', async () => {
+    const viewer = user('student');
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = false;
+    server.use(
+      http.get(currentUserUrl, async () => {
+        if (held) await gate;
+        return HttpResponse.json(viewer);
+      }),
+      http.post(auth('email/change/confirm'), () => {
+        held = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const router = createTestRouter('/email/change/confirm?token=one', viewer);
+    await router.load();
+    renderRouter(router);
+    expect(await page().findByRole('heading', { level: 1, name: 'Пошту змінено' })).toBeTruthy();
+    expect(page().getByRole('link', { name: 'Налаштування акаунта' })).toBeTruthy();
+    if (release === undefined) throw new Error('The session gate was not initialized');
+    release();
+  });
+
+  test('ACCT-6 has no retry for a refused origin', async () => {
+    answerWith(user('student'));
+    server.use(
+      http.post(auth('email/change/confirm'), () =>
+        HttpResponse.json(envelope('origin_forbidden'), { status: 403 }),
+      ),
+    );
+    const router = createTestRouter('/email/change/confirm?token=one', user('student'));
+    await router.load();
+    renderRouter(router);
+    expect(
+      await page().findByRole('link', { name: 'Перейти до налаштувань акаунта' }),
+    ).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Спробувати ще раз' })).toBeNull();
+  });
+
+  const enrollmentBody = {
+    secret: 'A'.repeat(16),
+    otpauthUri: 'otpauth://totp/CourseForge:test?secret=AAAAAAAAAAAAAAAA',
+  };
+
+  async function openSettings(viewer: AuthenticatedUser) {
+    const router = createTestRouter('/settings/account', viewer);
+    await router.load();
+    renderRouter(router);
+    await page().findByRole('heading', { level: 1, name: 'Налаштування акаунта' });
+    return router;
+  }
+
+  test('ACCT-9 an uncertain confirm hides «Скасувати» and keeps it hidden after a 400', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    const answers = [
+      () => HttpResponse.json(dependencyUnavailable, { status: 503 }),
+      () => HttpResponse.json(envelope('invalid_request'), { status: 400 }),
+    ];
+    server.use(
+      http.post(auth('2fa/enroll'), () => HttpResponse.json(enrollmentBody)),
+      http.post(auth('2fa/confirm'), () => {
+        const next = answers.shift();
+        if (next === undefined) throw new Error('Unexpected third confirm');
+        return next();
+      }),
+    );
+    await openSettings(viewer);
+    await userEvent.click(page().getByRole('button', { name: 'Увімкнути 2FA' }));
+    await userEvent.type(
+      await page().findByLabelText('Код автентифікатора або резервний код'),
+      '123456',
+    );
+    await userEvent.click(page().getByRole('button', { name: 'Підтвердити 2FA' }));
+    expect(await page().findByText(/Стан 2FA міг змінитися/)).toBeTruthy();
+    expect(page().getByRole('button', { name: 'Оновити сторінку' })).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Скасувати' })).toBeNull();
+    await userEvent.click(page().getByRole('button', { name: 'Підтвердити 2FA' }));
+    await waitFor(() => expect(answers).toHaveLength(0));
+    expect(await page().findByText('Перевірте введені дані.')).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Скасувати' })).toBeNull();
+  });
+
+  test('ACCT-9 a conflicting enroll asks for a reload', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    server.use(
+      http.post(auth('2fa/enroll'), () =>
+        HttpResponse.json(envelope('twofactor_already_enabled'), { status: 409 }),
+      ),
+    );
+    await openSettings(viewer);
+    await userEvent.click(page().getByRole('button', { name: 'Увімкнути 2FA' }));
+    expect(await page().findByText(/Стан 2FA міг змінитися/)).toBeTruthy();
+    expect(page().getByRole('button', { name: 'Оновити сторінку' })).toBeTruthy();
+  });
+
+  test.each([
+    ['2fa/disable', 'Вимкнути 2FA', 503, 'dependency_unavailable', /Стан 2FA міг змінитися/],
+    ['2fa/disable', 'Вимкнути 2FA', 409, 'twofactor_not_enabled', /Стан 2FA міг змінитися/],
+    [
+      '2fa/recovery-codes',
+      'Резервні коди',
+      503,
+      'dependency_unavailable',
+      /старі резервні коди вже не діють/,
+    ],
+    ['2fa/recovery-codes', 'Резервні коди', 409, 'twofactor_not_enabled', /Стан 2FA міг змінитися/],
+    ['2fa/disable', 'Вимкнути 2FA', 401, 'recovery_code_invalid', /Резервний код неправильний/],
+    [
+      '2fa/recovery-codes',
+      'Резервні коди',
+      401,
+      'invalid_credentials',
+      /Поточний пароль неправильний/,
+    ],
+  ] as const)(
+    'ACCT-9 %s in form «%s» answers %i %s with its own text',
+    async (path, formName, status, code, text) => {
+      const viewer = { ...user('student'), twoFactorEnabled: true };
+      answerWith(viewer);
+      server.use(http.post(auth(path), () => HttpResponse.json(envelope(code), { status })));
+      await openSettings(viewer);
+      const form = page().getByRole('form', { name: formName });
+      for (const field of within(form).getAllByRole('textbox'))
+        await userEvent.type(field, '123456');
+      const password = form.querySelector('input[type="password"]');
+      if (password instanceof HTMLInputElement) await userEvent.type(password, 'secret');
+      await userEvent.click(
+        within(form).getByRole('button', {
+          name: formName === 'Резервні коди' ? 'Отримати нові резервні коди' : formName,
+        }),
+      );
+      expect(await page().findByText(text)).toBeTruthy();
+      expect(page().getByText('2FA увімкнено.')).toBeTruthy();
+    },
+  );
+
+  test('ACCT-9 a write that finds the session ended publishes it and goes to sign-in', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    server.use(
+      http.post(auth('password/change'), () =>
+        HttpResponse.json(authenticationRequired, { status: 401 }),
+      ),
+    );
+    const router = await openSettings(viewer);
+    await userEvent.type(page().getByLabelText('Поточний пароль'), 'old');
+    await userEvent.type(page().getByLabelText('Новий пароль'), 'new password');
+    await userEvent.click(page().getByRole('button', { name: 'Змінити пароль' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+    expect(router.options.context.queryClient.getQueryData(sessionQueryKey)).toBeNull();
+  });
+
+  test('ACCT-9 two presses before a render send one password change and one 2FA action', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    let passwordPosts = 0;
+    let enrollPosts = 0;
+    server.use(
+      http.post(auth('password/change'), async () => {
+        passwordPosts += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post(auth('2fa/enroll'), () => {
+        enrollPosts += 1;
+        return HttpResponse.json(enrollmentBody);
+      }),
+    );
+    await openSettings(viewer);
+    await userEvent.type(page().getByLabelText('Поточний пароль'), 'old');
+    await userEvent.type(page().getByLabelText('Новий пароль'), 'new password');
+    const change = page().getByRole('button', { name: 'Змінити пароль' });
+    fireEvent.click(change);
+    fireEvent.click(change);
+    const enable = page().getByRole('button', { name: 'Увімкнути 2FA' });
+    fireEvent.click(enable);
+    fireEvent.click(enable);
+    expect(await page().findByText('Пароль змінено. Інші сеанси завершено.')).toBeTruthy();
+    expect(await page().findByLabelText('Секрет для ручного налаштування')).toBeTruthy();
+    expect(passwordPosts).toBe(1);
+    expect(enrollPosts).toBe(1);
+  });
+
+  test('ACCT-V5a a conflicting 2FA confirm keeps «Скасувати» hidden after a later rejection', async () => {
+    const viewer = user('student');
+    answerWith(viewer);
+    const answers = [
+      () => HttpResponse.json(envelope('twofactor_already_enabled'), { status: 409 }),
+      () => HttpResponse.json(envelope('invalid_credentials'), { status: 401 }),
+    ];
+    server.use(
+      http.post(auth('2fa/enroll'), () =>
+        HttpResponse.json({
+          secret: 'A'.repeat(16),
+          otpauthUri: 'otpauth://totp/CourseForge:test?secret=AAAAAAAAAAAAAAAA',
+        }),
+      ),
+      http.post(auth('2fa/confirm'), () => {
+        const next = answers.shift();
+        if (next === undefined) throw new Error('Unexpected third confirm');
+        return next();
+      }),
+    );
+    const router = createTestRouter('/settings/account', viewer);
+    await router.load();
+    renderRouter(router);
+    await userEvent.click(await page().findByRole('button', { name: 'Увімкнути 2FA' }));
+    expect(await page().findByRole('button', { name: 'Скасувати' })).toBeTruthy();
+    const field = page().getByLabelText('Код автентифікатора або резервний код');
+    await userEvent.type(field, '123456');
+    await userEvent.click(page().getByRole('button', { name: 'Підтвердити 2FA' }));
+    expect(await page().findByText(/Стан 2FA міг змінитися/)).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Скасувати' })).toBeNull();
+    await userEvent.click(page().getByRole('button', { name: 'Підтвердити 2FA' }));
+    await waitFor(() => expect(answers).toHaveLength(0));
+    expect(await page().findByText(/Стан 2FA міг змінитися/)).toBeTruthy();
+    expect(page().queryByRole('button', { name: 'Скасувати' })).toBeNull();
+  });
 });

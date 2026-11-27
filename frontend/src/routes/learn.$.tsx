@@ -26,7 +26,8 @@ import { LessonPlayer } from '../modules/playback';
 import { LessonDocumentView } from '../modules/document';
 import { TranscriptPanel } from '../modules/transcript';
 import { DiscussionPanel } from '../modules/discussion';
-import { LearnRouteFailure } from '../modules/identity';
+import { LearnRouteFailure, ResendResult } from '../modules/identity';
+import { useResendVerification } from '../app/composition/resend-verification';
 import { toWebVTT, transcriptPanelState } from '../modules/transcript';
 import { LearnEmptyState } from './learn';
 import { DiscussionQueryError } from '../app/composition/discussion-queries';
@@ -183,9 +184,7 @@ function OpenLesson({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const startPurchase = useMutation(learn.purchase.start(queryClient));
-  const resendVerification = useMutation({
-    mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
-  });
+  const resendVerification = useResendVerification(identityDependencies);
   const lessonId = lesson.id;
   const mount = useMemo(() => Symbol(`player:${lessonId}`), [lessonId]);
   const [captionState, setCaptionState] = useState<{
@@ -355,7 +354,8 @@ function OpenLesson({
       {emailGated ? (
         <EmailVerificationGate
           isPending={resendVerification.isPending}
-          onResend={() => resendVerification.mutate()}
+          onResend={() => resendVerification.resend()}
+          result={<ResendResult outcome={resendVerification.outcome} />}
         />
       ) : (
         <LessonPlayer
