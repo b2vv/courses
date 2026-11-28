@@ -80,7 +80,8 @@ The decision «A3 reads only after S2/S4» in the first version of this record w
 | Frontend unit (after R1 fixes) | 119 files, 1652/1652 at load average ~15 |
 | Frontend unit (first version) | Before the last three fixes: 119 files, 1624/1624. After them, the full run under a host load average of 15–45 (Kiri VM ~224 % CPU from other work) had 9–11 failures in admin/media/route files: timeouts plus two `findBy` misses. The same four files run alone: 224/227, then 227/227. The ordered `make check` is the gate for this |
 | e2e `accounts.spec.ts` (targeted, Kiri) | 8/8, B19 in budget, also after the R1, R2 and R3 fixes (runs 4–6; run 3 8/8; run 1 failed on the axe finding above, run 2 printed its node) |
-| Full ordered `make check` on `cf3e7cf0` | **Red three times**, each time one playback test only (everything before e2e green: unit 1658/1658; B19 7/7). Run 1: P08 «watched 24.7 s, want > 25». Run 2: audio-tracks S7 «Пауза» not shown within 5 s. See «Gate attempts» below |
+| Full ordered `make check` on `d6edd4b3` | **GATE_EXIT=0** (2026-11-28, run 6, Kiri, after Spotify was closed: host load ~12): unit 1658/1658, Go 130 packages `ok` and 0 `FAIL`, e2e 177 passed, B19 7/7. Earlier runs 1–5 were red (below) |
+| Full ordered `make check` on `cf3e7cf0` | **Red three times (runs 1–3)**, each time one playback test only (everything before e2e green: unit 1658/1658; B19 7/7). Run 1: P08 «watched 24.7 s, want > 25». Run 2: audio-tracks S7 «Пауза» not shown within 5 s. See «Gate attempts» below || Full ordered `make check` on `cf3e7cf0` | **Red three times (runs 1–3)**, each time one playback test only (everything before e2e green: unit 1658/1658; B19 7/7). Run 1: P08 «watched 24.7 s, want > 25». Run 2: audio-tracks S7 «Пауза» not shown within 5 s. See «Gate attempts» below |
 
 ## Gate attempts
 
@@ -99,7 +100,7 @@ Each red gate failed on a different playback test, and each of them passes alone
 
 - Runs 4 and 5 on the branch (`5daf6413`, 2026-11-27/28) stopped at `make test`: 11 and 15 unit failures, nearly all 5 s/20 s timeouts, in `CourseEditorView.test.tsx` and `route-guards.test.tsx`. These are the same files that passed 1658/1658 earlier the same day at a host load average of ~10–12. Each run started at a host load average of 36–44: other work on the Mac (another project's Storybook build and headless Chromium, Spotify), not the VM. The owner had cargo's and Cassiopeia's containers stopped, but `make test` runs on the host, so this did not help.
 
-So the playback e2e family fails one test per full run today on this host with and without the slice; the slice's three red gates are that same instability, not a regression the slice adds. This is a conclusion from four gates and the isolated reruns, not a pass: no full ordered gate is green on the slice.
+So the playback e2e family fails one test per full run today on this host with and without the slice; the slice's three red gates are that same instability, not a regression the slice adds. This is a conclusion from four gates and the isolated reruns, not a pass: no full ordered gate was green on the slice until run 6, which passed on a quiet host (above).
 
 No mechanism links the slice to these failures. The `main`/branch difference is 0/6 against 2/5, a small sample. The two red gates are not counted as a pass.
 
