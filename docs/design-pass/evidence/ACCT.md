@@ -97,6 +97,8 @@ Each red gate failed on a different playback test, and each of them passes alone
 
 - The same ordered `make check` on `main` (`58622b51`, without the slice), the same VM, Cassiopeia still stopped: **red too**, on one playback test, `playback.spec.ts` R23 «a complete 100-second lesson…» (7.0 min). Unit 1589/1589, B19 7/7, 167 passed, 9 did not run.
 
+- Runs 4 and 5 on the branch (`5daf6413`, 2026-11-27/28) stopped at `make test`: 11 and 15 unit failures, nearly all 5 s/20 s timeouts, in `CourseEditorView.test.tsx` and `route-guards.test.tsx`. These are the same files that passed 1658/1658 earlier the same day at a host load average of ~10–12. Each run started at a host load average of 36–44: other work on the Mac (another project's Storybook build and headless Chromium, Spotify), not the VM. The owner had cargo's and Cassiopeia's containers stopped, but `make test` runs on the host, so this did not help.
+
 So the playback e2e family fails one test per full run today on this host with and without the slice; the slice's three red gates are that same instability, not a regression the slice adds. This is a conclusion from four gates and the isolated reruns, not a pass: no full ordered gate is green on the slice.
 
 No mechanism links the slice to these failures. The `main`/branch difference is 0/6 against 2/5, a small sample. The two red gates are not counted as a pass.
