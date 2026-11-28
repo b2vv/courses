@@ -147,14 +147,21 @@ function mailBody(payload: unknown) {
   return body.join('\n').replaceAll('&amp;', '&');
 }
 
-async function readMailLink(email: string, pathname: string) {
-  let result = '';
+/** The first link with `pathname` in a message not in `skip`, with that message's id. */
+async function readMailLink(
+  email: string,
+  pathname: string,
+  skip: ReadonlySet<string> = new Set(),
+) {
+  let result = { id: '', link: '' };
   await expect
     .poll(
       async () => {
         const messages = await messagesFor(email);
         for (const message of messages) {
-          const detail = await fetch(`http://localhost:8025/api/v1/message/${messageID(message)}`);
+          const id = messageID(message);
+          if (skip.has(id)) continue;
+          const detail = await fetch(`http://localhost:8025/api/v1/message/${id}`);
           if (!detail.ok) throw new Error(`Mailpit detail failed: ${detail.status}`);
           const text = mailBody(await detail.json());
           const link = text.match(/https?:\/\/[^"'\s<>]+/g)?.find((candidate) => {
@@ -165,7 +172,7 @@ async function readMailLink(email: string, pathname: string) {
             }
           });
           if (link !== undefined) {
-            result = link;
+            result = { id, link };
             return true;
           }
         }
@@ -181,7 +188,10 @@ async function axeClean(page: Page) {
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => {
     const audit = await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'] });
-    return audit.violations.map((violation) => violation.id);
+    return audit.violations.map(
+      (violation) =>
+        `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+    );
   });
   expect(violations).toEqual([]);
 }
@@ -266,7 +276,7 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   await expect(page.getByText('Accounts E2E')).toBeVisible();
   await expect(page.getByLabel('Підтвердження пошти')).toBeVisible();
   await expect.poll(async () => (await messagesFor(initialEmail)).length).toBe(1);
-  const verifyLink = await readMailLink(initialEmail, '/verify-email');
+  const firstVerify = await readMailLink(initialEmail, '/verify-email');
 
   await page.goto(`/courses/${course.slug}`);
   await expect(page.getByText('A course visible before email verification.')).toBeVisible();
@@ -280,8 +290,87 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   expect(denied.status()).toBe(403);
   expect(await denied.json()).toMatchObject({ error: { code: 'email_not_verified' } });
 
-  await page.goto(verifyLink);
+  // ACCT-3: a stored session cookie the server no longer knows. A guest form resend answers
+  // «Сеанс завершився…» with a sign-in link; so does the banner while the client still caches the
+  // signed-in viewer, and its «Увійти» does a full load that shows the sign-in form.
+  const sessionCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === 'courseforge_session',
+  );
+  if (sessionCookie === undefined) throw new Error('Registration did not set a session cookie');
+  const staleCookie = { ...sessionCookie, value: `stale-${randomUUID()}` };
+  const staleGuest = await browser.newContext({ baseURL });
+  try {
+    await staleGuest.addCookies([staleCookie]);
+    const stalePage = await staleGuest.newPage();
+    await stalePage.goto('/verify-email');
+    const staleMain = stalePage.getByRole('main');
+    await staleMain.getByRole('textbox', { name: 'Електронна пошта' }).fill(initialEmail);
+    await staleMain.getByRole('button', { name: 'Надіслати лист знову' }).click();
+    await expect(staleMain.getByRole('alert')).toContainText('Сеанс завершився.');
+    await expect(staleMain.getByRole('alert').getByRole('link', { name: 'Увійти' })).toBeVisible();
+  } finally {
+    await staleGuest.close();
+  }
+  const cachedViewer = await browser.newContext({
+    baseURL,
+    storageState: await page.context().storageState(),
+  });
+  try {
+    const cachedPage = await cachedViewer.newPage();
+    await cachedPage.goto('/courses');
+    const banner = cachedPage.getByRole('complementary', { name: 'Підтвердження пошти' });
+    await expect(banner).toBeVisible();
+    await cachedViewer.addCookies([staleCookie]);
+    const refused = cachedPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/auth/resend-verification') &&
+        response.request().method() === 'POST',
+    );
+    await banner.getByRole('button', { name: 'Надіслати лист знову' }).click();
+    const refusal = await refused;
+    expect(refusal.status()).toBe(401);
+    expect(await refusal.json()).toMatchObject({ error: { code: 'authentication_required' } });
+    await banner.getByRole('link', { name: 'Увійти' }).click();
+    await expect(cachedPage.getByLabel('Пароль')).toBeVisible();
+  } finally {
+    await cachedViewer.close();
+  }
+
+  // «Лист і посилання»: a guest asks for a new letter; the first link is then spent (410), the new
+  // one verifies the signed-in viewer, and the first one again says the address is verified.
+  const guest = await browser.newContext({ baseURL });
+  let secondVerify: { id: string; link: string };
+  try {
+    const guestPage = await guest.newPage();
+    await guestPage.goto('/verify-email');
+    const guestMain = guestPage.getByRole('main');
+    await guestMain.getByRole('textbox', { name: 'Електронна пошта' }).fill(initialEmail);
+    await guestMain.getByRole('button', { name: 'Надіслати лист знову' }).click();
+    await expect(guestMain.getByText(/Запит прийнято\./)).toBeVisible();
+    secondVerify = await readMailLink(initialEmail, '/verify-email', new Set([firstVerify.id]));
+    const spent = guestPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/auth/verify-email') &&
+        response.request().method() === 'POST',
+    );
+    await guestPage.goto(firstVerify.link);
+    const spentAnswer = await spent;
+    expect(spentAnswer.status()).toBe(410);
+    expect(await spentAnswer.json()).toMatchObject({ error: { code: 'token_used' } });
+    await expect(
+      guestMain.getByRole('heading', { level: 1, name: 'Посилання не працює' }),
+    ).toBeVisible();
+  } finally {
+    await guest.close();
+  }
+
+  await page.goto(secondVerify.link);
   await expect(page.getByRole('heading', { name: 'Пошту підтверджено' })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', { name: 'До навчання' })).toBeVisible();
+  await page.goto(firstVerify.link);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Пошту вже підтверджено' }),
+  ).toBeVisible();
   await page.goto('/');
   await expect(page.getByLabel('Підтвердження пошти')).toHaveCount(0);
   await page.goto(`/learn/${course.slug}/${course.lessonId}`);
@@ -296,7 +385,7 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   const resetSession = await browser.newContext({
     storageState: await page.context().storageState(),
   });
-  const resetLink = await readMailLink(initialEmail, '/password/reset');
+  const { link: resetLink } = await readMailLink(initialEmail, '/password/reset');
   await page.goto(resetLink);
   await page.getByLabel('Новий пароль').fill(resetPassword);
   await page.getByRole('button', { name: 'Зберегти пароль' }).click();
@@ -334,8 +423,9 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   const emailForm = page.getByRole('heading', { name: 'Змінити електронну пошту' }).locator('..');
   await emailForm.getByRole('textbox', { name: 'Нова електронна пошта' }).fill(changedEmail);
   await emailForm.getByRole('button', { name: 'Змінити пошту' }).click();
-  await expect(emailForm.getByText('Підтвердіть зміну на новій адресі.')).toBeVisible();
-  const changeLink = await readMailLink(changedEmail, '/email/change/confirm');
+  await expect(emailForm.getByText(/Підтвердіть зміну за посиланням у листі/)).toBeVisible();
+  await expect(emailForm.getByRole('textbox', { name: 'Нова електронна пошта' })).toHaveValue('');
+  const { link: changeLink } = await readMailLink(changedEmail, '/email/change/confirm');
   expect(
     await page.request.get('/api/v1/auth/me').then((response) => response.json()),
   ).toMatchObject({
@@ -349,6 +439,11 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
     email: changedEmail,
     emailVerified: true,
   });
+  // ACCT-6: the spent link again → E4 → settings show the new address.
+  await page.goto(changeLink);
+  await expect(page.getByRole('heading', { level: 1, name: 'Посилання не працює' })).toBeVisible();
+  await page.getByRole('link', { name: 'Перейти до налаштувань акаунта' }).click();
+  await expect(page.getByText(`Поточна пошта: ${changedEmail}`)).toBeVisible();
 
   await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
   await login(page, changedEmail, changedPassword);
@@ -429,6 +524,7 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   const twoFactor = page.getByRole('heading', { name: 'Двофакторна автентифікація' }).locator('..');
   await twoFactor.getByRole('button', { name: 'Увімкнути 2FA' }).click();
   await expect(twoFactor.getByLabel('QR-код для двофакторної автентифікації')).toBeVisible();
+  await expect(twoFactor.getByText(/^Відскануйте цей QR-код/)).toBeFocused();
   const secret = await twoFactor.getByLabel('Секрет для ручного налаштування').inputValue();
   await expect(twoFactor.getByLabel('Секрет для ручного налаштування')).toHaveValue(secret);
   await axeClean(page);
@@ -438,8 +534,12 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
     name: 'Збережіть ці резервні коди: вдруге їх не буде показано.',
   });
   await expect(recoveryList).toHaveCount(1);
+  await expect(twoFactor.getByText('2FA увімкнено.')).toBeFocused();
   const recoveryCodes = await recoveryList.locator('code').allTextContents();
   expect(recoveryCodes).toHaveLength(10);
+  await twoFactor.getByRole('button', { name: 'Готово' }).click();
+  await expect(recoveryList).toHaveCount(0);
+  await expect(twoFactor.getByText('2FA увімкнено.')).toBeFocused();
   const [usedRecoveryCode, staleRecoveryCode] = recoveryCodes;
   if (usedRecoveryCode === undefined || staleRecoveryCode === undefined)
     throw new Error('2FA enrollment did not return recovery codes');
@@ -478,12 +578,11 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 
   await page.goto('/settings/account');
-  await twoFactor
-    .getByLabel('Код автентифікатора або резервний код')
-    .last()
-    .fill(await freshTotp(secret));
-  await twoFactor.getByRole('button', { name: 'Перегенерувати резервні коди' }).click();
+  const codesForm = twoFactor.getByRole('form', { name: 'Резервні коди' });
+  await codesForm.getByLabel('Код автентифікатора або резервний код').fill(await freshTotp(secret));
+  await codesForm.getByRole('button', { name: 'Отримати нові резервні коди' }).click();
   await expect(recoveryList).toHaveCount(1);
+  await expect(twoFactor.getByText('Нові резервні коди')).toBeFocused();
   await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
   await startTwoFactorLogin(page);
   await page.getByRole('button', { name: 'Ввести резервний код' }).click();
@@ -498,13 +597,14 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 
   await page.goto('/settings/account');
-  await twoFactor.getByLabel('Поточний пароль').last().fill(changedPassword);
-  await twoFactor
+  const disableForm = twoFactor.getByRole('form', { name: 'Вимкнути 2FA' });
+  await disableForm.getByLabel('Поточний пароль').fill(changedPassword);
+  await disableForm
     .getByLabel('Код автентифікатора або резервний код')
-    .first()
     .fill(await freshTotp(secret));
-  await twoFactor.getByRole('button', { name: 'Вимкнути 2FA' }).click();
+  await disableForm.getByRole('button', { name: 'Вимкнути 2FA' }).click();
   await expect(twoFactor.getByText('Захист 2FA ще не ввімкнено.')).toBeVisible();
+  await expect(twoFactor.getByText('Захист 2FA ще не ввімкнено.')).toBeFocused();
 
   // Disabling resets the server's consumed-step counter to 0 (DisableUserTotp), and re-enrolment
   // below mints a fresh secret, so the next proof need only clear 0. Drop the local high-water mark
@@ -514,6 +614,22 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   const adminResetSecret = await twoFactor
     .getByLabel('Секрет для ручного налаштування')
     .inputValue();
+  // A wrong code by Enter keeps focus on the button (jsdom does not see a `disabled` focus loss).
+  // A code that is none of the secret's codes in the steps around now, so it is surely wrong.
+  const nearStep = Math.floor(Date.now() / totpPeriodMs);
+  const nearCodes = [-2, -1, 0, 1, 2].map((offset) =>
+    totp(adminResetSecret, (nearStep + offset) * totpPeriodMs),
+  );
+  const wrongCode = ['000000', '111111', '222222', '333333', '444444', '555555'].find(
+    (candidate) => !nearCodes.includes(candidate),
+  );
+  if (wrongCode === undefined) throw new Error('No wrong TOTP code could be chosen');
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(wrongCode);
+  const confirmButton = twoFactor.getByRole('button', { name: 'Підтвердити 2FA' });
+  await confirmButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(twoFactor.getByRole('alert')).toBeVisible();
+  await expect(confirmButton).toBeFocused();
   await twoFactor
     .getByLabel('Код автентифікатора або резервний код')
     .fill(await freshTotp(adminResetSecret));

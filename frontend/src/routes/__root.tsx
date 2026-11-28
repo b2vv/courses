@@ -7,7 +7,7 @@ import {
   useRouter,
   useRouterState,
 } from '@tanstack/react-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
@@ -25,6 +25,7 @@ import type { TranscriptHistoryStore } from '../modules/transcript';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../modules/identity';
 import { EmailVerificationBanner } from '../modules/identity';
+import { useResendVerification } from '../app/composition/resend-verification';
 import { MenuCard, StatusPage, Toast } from '../presentation/ui';
 import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
 import type { createI18n } from '../app/providers/i18n';
@@ -233,9 +234,9 @@ function Layout() {
     [router, learn],
   );
   useFocusAfterNavigation();
-  const resendVerification = useMutation({
-    mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
-  });
+  // Owned by the layout, so a result survives a visit to the admin surface; tied to the viewer,
+  // so it never shows to the next signed-in account (ACCT V1).
+  const resendVerification = useResendVerification(identityDependencies, session.data?.id);
 
   // The admin side is its own root layout: AdminShell (sidebar + top bar + the
   // #main skip target) replaces the client header and footer. It lives here, not
@@ -389,8 +390,11 @@ function Layout() {
       {session.data?.emailVerified === false && (
         <div className="shell">
           <EmailVerificationBanner
+            // Keyed by the viewer: «Закрити» hides the banner for this account only.
+            key={session.data.id}
             isPending={resendVerification.isPending}
-            onResend={() => resendVerification.mutate()}
+            outcome={resendVerification.outcome}
+            onResend={() => resendVerification.resend()}
           />
         </div>
       )}

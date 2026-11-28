@@ -137,3 +137,26 @@ export function safeReturnTo(value: string | undefined, fallback = '/learn'): st
   if (path.split('/').some((segment) => segment === '.' || segment === '..')) return fallback;
   return path + (search === '?' ? '' : search);
 }
+
+/**
+ * What a «resend the verification email» press came to (design-pass ACCT V1). A 204 is only
+ * an accepted request: the server answers it for an unknown or verified address and after a
+ * mailer failure too, so `accepted` never claims a letter was sent.
+ */
+export type ResendOutcome = 'accepted' | 'rate_limited' | 'session_ended' | 'failed';
+
+export function resendOutcomeOf(code: SessionErrorCode): ResendOutcome {
+  if (code === 'rate_limited') return 'rate_limited';
+  if (code === 'authentication_required') return 'session_ended';
+  return 'failed';
+}
+
+/** A write whose outcome is unknown: the server may have applied it (design-pass ACCT V4b). */
+export function isUncertainWriteError(code: SessionErrorCode): boolean {
+  return (
+    code === 'dependency_unavailable' || code === 'request_timeout' || code === 'invalid_response'
+  );
+}
+
+/** The 2FA writes on the account settings page; an error is shown in its own action's form. */
+export type TwoFactorAction = 'enroll' | 'confirm' | 'disable' | 'regenerate';

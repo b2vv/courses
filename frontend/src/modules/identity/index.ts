@@ -18,13 +18,16 @@ export { createApiSessionRepository } from './adapters/session-repository';
 // UI.
 export { AccountSettingsView } from './ui/AccountSettingsView';
 export { ConfirmEmailChangeView } from './ui/ConfirmEmailChangeView';
+export type { ConfirmEmailChangeState } from './ui/ConfirmEmailChangeView';
 export { EmailVerificationBanner } from './ui/EmailVerificationBanner';
 export { IdentityHeader } from './ui/IdentityHeader';
 export { LoginView } from './ui/LoginView';
 export { PasswordForgotView } from './ui/PasswordForgotView';
 export { PasswordResetView } from './ui/PasswordResetView';
 export { RegisterView } from './ui/RegisterView';
+export { ResendResult } from './ui/ResendResult';
 export { VerifyEmailView } from './ui/VerifyEmailView';
+export type { VerifyEmailState } from './ui/VerifyEmailView';
 export {
   LearnAccessDenied,
   LearnRouteFailure,

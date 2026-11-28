@@ -20,6 +20,18 @@ test('offers resend instead of a player for an unverified learner', async () => 
   expect(resent).toEqual([1]);
 });
 
+test('V1 keeps the resend button focusable while pending and shows the given result', () => {
+  render(
+    <I18nProvider instance={createI18n('uk')}>
+      <EmailVerificationGate isPending onResend={() => undefined} result={<p>Відповідь</p>} />
+    </I18nProvider>,
+  );
+  const button = screen.getByRole('button', { name: 'Надсилаємо…' });
+  expect(button.hasAttribute('disabled')).toBe(false);
+  expect(button.getAttribute('aria-disabled')).toBe('true');
+  expect(screen.getByText('Відповідь')).toBeTruthy();
+});
+
 test('gates only an unverified signed-in learner', () => {
   const user = {
     id: 'id',

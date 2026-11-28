@@ -462,11 +462,12 @@ nav a {
 /* Enlarged text only (the page is under ~14em wide at 200% on a phone): a heading word that does
    not fit breaks at a syllable with a hyphen, not at an arbitrary letter (C3b; the TYPE and
    C3 #9 rule). At normal size no hyphens appear. */
-.status-page {
+.status-page,
+.notice {
   container-type: inline-size;
 }
 @container (max-width: 14em) {
-  .status-page :is(h1, p, .ui-button) {
+  :is(.status-page, .notice) :is(h1, p, .ui-button) {
     overflow-wrap: normal;
     hyphens: auto;
   }
@@ -526,6 +527,26 @@ a.ui-button {
   text-decoration: none;
   margin-block-start: var(--space-4);
 }
+/* The same gap for the other direct actions of a status notice (verify email, email change:
+   design-pass ACCT V13); the AUTH forms keep their own rhythm through `.notice form`. */
+.notice > .ui-button,
+.notice > .cluster,
+.notice > .notice-action {
+  margin-block-start: var(--space-4);
+}
+/* A row of actions that wraps when the line is short. */
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+/* A confirmed write: success colour, not body text (design-pass ACCT V10). */
+.form-success {
+  display: block;
+  color: var(--color-success);
+  font-weight: 600;
+}
 .account-settings {
   max-width: 42rem;
   display: grid;
@@ -545,6 +566,46 @@ a.ui-button {
 .account-settings-card form {
   display: grid;
   gap: var(--space-3);
+}
+/* Each action keeps its own width at the start of the row, as in the AUTH forms (ACCT V11). */
+.account-settings-card form > :not(.ui-field),
+.account-settings-card > .ui-button {
+  justify-self: start;
+}
+/* A group heading inside the card: lighter than the card's h2, heavier than its text (ACCT V7). */
+.account-settings-card h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.3;
+  font-weight: 700;
+}
+.account-settings-card form + form {
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+.account-current-email {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* The manual secret reads in full at any width: monospace, breaks anywhere, height follows the
+   text (ACCT V15). Browsers without field-sizing keep three rows. */
+.account-settings-card textarea[name='two-factor-secret'] {
+  font-family: monospace, monospace;
+  word-break: break-all;
+  resize: none;
+  min-block-size: 0;
+  field-sizing: content;
+}
+@supports not (field-sizing: content) {
+  .account-settings-card textarea[name='two-factor-secret'] {
+    block-size: calc(3lh + 1.5rem);
+  }
+}
+.two-factor-unknown {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
 }
 .verification-banner,
 .lesson-verification-gate {
